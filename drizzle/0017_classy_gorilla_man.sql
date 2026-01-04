@@ -1,0 +1,1 @@
+ALTER TABLE `invited_users` ADD `name` text;

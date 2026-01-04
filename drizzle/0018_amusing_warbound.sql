@@ -1,0 +1,1 @@
+ALTER TABLE `counselors` ADD `unavailabilityText` varchar(100);

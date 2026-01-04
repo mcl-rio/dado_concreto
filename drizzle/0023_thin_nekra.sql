@@ -1,0 +1,1 @@
+ALTER TABLE `llm_pricing` DROP COLUMN `apiKey`;

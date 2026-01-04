@@ -1,0 +1,961 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Gotham Font - Using system fonts as fallback since Gotham is proprietary */
+@font-face {
+  font-family: 'Gotham';
+  src: local('Gotham'), local('Gotham-Book'), local('Arial');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gotham';
+  src: local('Gotham-Medium'), local('Gotham Medium'), local('Arial');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gotham';
+  src: local('Gotham-Bold'), local('Gotham Bold'), local('Arial Black');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gotham';
+  src: local('Gotham-Light'), local('Gotham Light'), local('Arial');
+  font-weight: 300;
+  font-style: normal;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+/* FGV Color Palette - New */
+/**
+ * ==========================================================================
+ * PALETA DE CORES OFICIAL FGV - Função Getulio Vargas
+ * ==========================================================================
+ * IMPORTANTE: Todas as cores usadas no app DEVEM estar nesta paleta.
+ * Não use cores fora desta lista sem aprovação da coordenação.
+ * ==========================================================================
+ */
+
+:root {
+  /* ==========================================================================
+   * CORES PRIMÁRIAS - Para elementos principais, headers, botões principais
+   * ========================================================================== */
+  --fgv-primary-1: #002D4D;      /* Azul escuro - fundos principais */
+  --fgv-primary-2: #003A79;      /* Azul principal 1 - botões, links */
+  --fgv-primary-3: #008BC9;      /* Azul principal 2 - destaques, hover */
+  --fgv-primary-4: #73BFE8;      /* Azul claro - backgrounds suaves */
+  
+  /* ==========================================================================
+   * CORES SECUNDÁRIAS - Para textos, bordas, fundos neutros
+   * ========================================================================== */
+  --fgv-secondary-1: #5C5B5F;    /* Cinza escuro - texto principal */
+  --fgv-secondary-2: #88868B;    /* Cinza médio - texto secundário */
+  --fgv-secondary-3: #AFAEB4;    /* Cinza secundária 1 - bordas, placeholders */
+  --fgv-secondary-4: #D7D9DD;    /* Cinza claro - fundos, separadores */
+  --fgv-secondary-5: #FFFFFF;    /* Branco secundária 2 - fundos limpos */
+  
+  /* ==========================================================================
+   * CORES AUXILIARES - Para gráficos, badges, categorias, alertas
+   * ========================================================================== */
+  /* Amarelos */
+  --fgv-aux-yellow-1: #FFE896;   /* Amarelo claro */
+  --fgv-aux-yellow-2: #C59B2A;   /* Amarelo escuro / Dourado */
+  
+  /* Laranjas */
+  --fgv-aux-orange-1: #F0BF78;   /* Laranja claro */
+  --fgv-aux-orange-2: #B06F0B;   /* Laranja escuro */
+  
+  /* Rosas */
+  --fgv-aux-pink-1: #CC8290;     /* Rosa claro */
+  --fgv-aux-pink-2: #7F1343;     /* Rosa escuro / Magenta */
+  
+  /* Roxos */
+  --fgv-aux-purple-1: #C497C2;   /* Roxo claro */
+  --fgv-aux-purple-2: #78487F;   /* Roxo escuro */
+  
+  /* Teais */
+  --fgv-aux-teal-1: #8BC8C0;     /* Teal claro */
+  --fgv-aux-teal-2: #2B8671;     /* Teal escuro */
+  
+  /* Verdes */
+  --fgv-aux-green-1: #ACCB72;    /* Verde claro */
+  --fgv-aux-green-2: #668040;    /* Verde escuro */
+  
+  /* ==========================================================================
+   * CORES VIBRANTES - Para elementos de destaque especial, animações
+   * ========================================================================== */
+  /* Roxos Vibrantes */
+  --fgv-vibrant-purple-1: #A02BAD;  /* Roxo vibrante */
+  --fgv-vibrant-purple-2: #C680CE;  /* Roxo vibrante claro */
+  --fgv-vibrant-purple-3: #782082;  /* Roxo vibrante escuro */
+  
+  /* Cianos Vibrantes */
+  --fgv-vibrant-cyan-1: #01FFFF;    /* Ciano vibrante */
+  --fgv-vibrant-cyan-2: #99FFFF;    /* Ciano vibrante claro */
+  --fgv-vibrant-cyan-3: #01BFBF;    /* Ciano vibrante escuro */
+  
+  /* Verdes Vibrantes */
+  --fgv-vibrant-green-1: #00E1AC;   /* Verde vibrante */
+  --fgv-vibrant-green-2: #66EDCD;   /* Verde vibrante claro */
+  --fgv-vibrant-green-3: #00A981;   /* Verde vibrante escuro */
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: 'Gotham', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+:root {
+  /* Primary - FGV Blue #003A79 */
+  --primary: oklch(0.30 0.10 250);
+  --primary-foreground: oklch(0.99 0 0);
+  --sidebar-primary: oklch(0.30 0.10 250);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  /* Accent - FGV Light Blue #008BC9 */
+  --accent: oklch(0.60 0.15 230);
+  --accent-foreground: oklch(0.99 0 0);
+  --chart-1: oklch(0.30 0.10 250);
+  --chart-2: oklch(0.50 0.12 230);
+  --chart-3: oklch(0.60 0.15 230);
+  --chart-4: oklch(0.70 0.10 230);
+  --chart-5: oklch(0.45 0.12 160);
+  --radius: 0.5rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.20 0.02 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.20 0.02 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.20 0.02 250);
+  --secondary: oklch(0.95 0.005 250);
+  --secondary-foreground: oklch(0.35 0.02 250);
+  --muted: oklch(0.92 0.005 250);
+  --muted-foreground: oklch(0.50 0.02 250);
+  --destructive: oklch(0.55 0.20 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.88 0.005 250);
+  --input: oklch(0.88 0.005 250);
+  --ring: oklch(0.30 0.10 250);
+  --sidebar: oklch(0.18 0.06 250);
+  --sidebar-foreground: oklch(0.95 0.01 250);
+  --sidebar-accent: oklch(0.25 0.06 250);
+  --sidebar-accent-foreground: oklch(0.95 0.01 250);
+  --sidebar-border: oklch(0.30 0.04 250);
+  --sidebar-ring: oklch(0.60 0.15 230);
+}
+
+.dark {
+  --primary: oklch(0.60 0.15 230);
+  --primary-foreground: oklch(0.99 0 0);
+  --sidebar-primary: oklch(0.60 0.15 230);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --background: oklch(0.15 0.02 250);
+  --foreground: oklch(0.95 0.01 250);
+  --card: oklch(0.20 0.02 250);
+  --card-foreground: oklch(0.95 0.01 250);
+  --popover: oklch(0.20 0.02 250);
+  --popover-foreground: oklch(0.95 0.01 250);
+  --secondary: oklch(0.25 0.02 250);
+  --secondary-foreground: oklch(0.85 0.01 250);
+  --muted: oklch(0.28 0.02 250);
+  --muted-foreground: oklch(0.70 0.02 250);
+  --accent: oklch(0.30 0.06 250);
+  --accent-foreground: oklch(0.95 0.01 250);
+  --destructive: oklch(0.60 0.20 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.30 0.02 250);
+  --input: oklch(0.30 0.02 250);
+  --ring: oklch(0.60 0.15 230);
+  --chart-1: oklch(0.70 0.10 230);
+  --chart-2: oklch(0.60 0.15 230);
+  --chart-3: oklch(0.50 0.12 230);
+  --chart-4: oklch(0.40 0.10 250);
+  --chart-5: oklch(0.55 0.12 160);
+  --sidebar: oklch(0.15 0.04 250);
+  --sidebar-foreground: oklch(0.95 0.01 250);
+  --sidebar-accent: oklch(0.25 0.04 250);
+  --sidebar-accent-foreground: oklch(0.95 0.01 250);
+  --sidebar-border: oklch(0.30 0.02 250);
+  --sidebar-ring: oklch(0.60 0.15 230);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Gotham', 'Inter', system-ui, sans-serif;
+  }
+  
+  /* FGV Typography */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Gotham', 'Inter', system-ui, sans-serif;
+    font-weight: 700;
+  }
+  
+  h1 {
+    color: var(--fgv-primary-2);
+  }
+  
+  h2 {
+    color: var(--fgv-primary-2);
+  }
+  
+  h3 {
+    color: var(--fgv-primary-1);
+  }
+  
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}
+
+@layer utilities {
+  /* FGV Color utilities */
+  .bg-fgv-primary {
+    background-color: var(--fgv-primary-2);
+  }
+  
+  .bg-fgv-primary-dark {
+    background-color: var(--fgv-primary-1);
+  }
+  
+  .bg-fgv-primary-light {
+    background-color: var(--fgv-primary-3);
+  }
+  
+  .bg-fgv-accent {
+    background-color: var(--fgv-primary-4);
+  }
+  
+  .text-fgv-primary {
+    color: var(--fgv-primary-2);
+  }
+  
+  .text-fgv-primary-dark {
+    color: var(--fgv-primary-1);
+  }
+  
+  .text-fgv-primary-light {
+    color: var(--fgv-primary-3);
+  }
+  
+  .text-fgv-accent {
+    color: var(--fgv-primary-4);
+  }
+  
+  .text-fgv-blue {
+    color: var(--fgv-primary-3);
+  }
+  
+  .bg-fgv-blue {
+    background-color: var(--fgv-primary-3);
+  }
+  
+  .text-fgv-light {
+    color: #D7D9DD;
+  }
+  
+  .border-fgv-primary {
+    border-color: var(--fgv-primary-2);
+  }
+
+  /* Botão Dourado FGV com hover suave */
+  .btn-fgv-gold {
+    background-color: var(--fgv-aux-yellow-2);
+    color: var(--fgv-primary-1);
+    font-weight: 600;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .btn-fgv-gold:hover {
+    background-color: color-mix(in srgb, var(--fgv-aux-yellow-2) 85%, white);
+    box-shadow: 0 4px 15px rgba(197, 155, 42, 0.35);
+    transform: translateY(-1px);
+  }
+  
+  .btn-fgv-gold:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(197, 155, 42, 0.25);
+  }
+
+  /* Gradient utilities */
+  .bg-fgv-gradient {
+    background: linear-gradient(135deg, var(--fgv-primary-1) 0%, var(--fgv-primary-2) 50%, var(--fgv-primary-3) 100%);
+  }
+  
+  .bg-fgv-gradient-horizontal {
+    background: linear-gradient(90deg, var(--fgv-primary-1) 0%, var(--fgv-primary-2) 100%);
+  }
+  
+  /* Analyst card styles */
+  .analyst-card {
+    @apply p-4 rounded-lg border-2 transition-all cursor-pointer;
+    border-color: var(--fgv-secondary-4);
+  }
+  
+  .analyst-card:hover {
+    border-color: var(--fgv-primary-3);
+    box-shadow: 0 4px 12px rgba(0, 58, 121, 0.15);
+  }
+  
+  .analyst-card.selected {
+    border-color: var(--fgv-primary-2);
+    background-color: rgba(0, 58, 121, 0.05);
+  }
+  
+  /* Progress step styles */
+  .progress-step {
+    @apply flex items-center gap-3 p-3 rounded-lg;
+    background-color: var(--fgv-secondary-4);
+  }
+  
+  .progress-step.running {
+    background-color: rgba(0, 139, 201, 0.1);
+    border-left: 4px solid var(--fgv-primary-3);
+  }
+  
+  .progress-step.completed {
+    background-color: rgba(43, 134, 113, 0.1);
+    border-left: 4px solid var(--fgv-aux-teal-2);
+  }
+  
+  .progress-step.error {
+    background-color: rgba(127, 19, 67, 0.1);
+    border-left: 4px solid var(--fgv-aux-pink-2);
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  /* Animação fade-in-up para hero parallax */
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .animate-fade-in-up {
+    animation: fade-in-up 0.8s ease-out;
+  }
+  
+  /* Animações suaves e elegantes para o hero */
+  @keyframes hero-fade-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(40px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes hero-fade-slide-right {
+    from {
+      opacity: 0;
+      transform: translateX(-30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  @keyframes hero-scale-fade {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+  @keyframes hero-blur-fade {
+    from {
+      opacity: 0;
+      filter: blur(10px);
+    }
+    to {
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+  
+  .animate-hero-fade-slide-up {
+    animation: hero-fade-slide-up 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+  }
+  
+  .animate-hero-fade-slide-right {
+    animation: hero-fade-slide-right 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+  }
+  
+  .animate-hero-scale-fade {
+    animation: hero-scale-fade 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+  }
+  
+  .animate-hero-blur-fade {
+    animation: hero-blur-fade 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+  }
+  
+  /* Animações de pulso para nós do globo - com mais destaque e brilho */
+  @keyframes node-pulse-1 {
+    0%, 100% { opacity: 0.35; transform: scale(1); background-color: var(--fgv-aux-yellow-1); box-shadow: 0 0 6px var(--fgv-aux-yellow-1), 0 0 12px var(--fgv-aux-yellow-1); }
+    50% { opacity: 0.85; transform: scale(1.5); background-color: var(--fgv-aux-yellow-2); box-shadow: 0 0 12px var(--fgv-aux-yellow-2), 0 0 24px var(--fgv-aux-yellow-2); }
+  }
+  
+  @keyframes node-pulse-2 {
+    0%, 100% { opacity: 0.30; transform: scale(1); background-color: var(--fgv-aux-orange-1); box-shadow: 0 0 6px var(--fgv-aux-orange-1), 0 0 12px var(--fgv-aux-orange-1); }
+    40% { opacity: 0.80; transform: scale(1.6); background-color: var(--fgv-aux-orange-2); box-shadow: 0 0 14px var(--fgv-aux-orange-2), 0 0 28px var(--fgv-aux-orange-2); }
+  }
+  
+  @keyframes node-pulse-3 {
+    0%, 100% { opacity: 0.32; transform: scale(1); background-color: var(--fgv-aux-yellow-2); box-shadow: 0 0 6px var(--fgv-aux-yellow-2), 0 0 12px var(--fgv-aux-yellow-2); }
+    60% { opacity: 0.82; transform: scale(1.4); background-color: var(--fgv-aux-orange-1); box-shadow: 0 0 10px var(--fgv-aux-orange-1), 0 0 20px var(--fgv-aux-orange-1); }
+  }
+  
+  .animate-node-pulse-1 {
+    animation: node-pulse-1 8s ease-in-out infinite;
+    opacity: 0.7;
+  }
+  
+  .animate-node-pulse-2 {
+    animation: node-pulse-2 10s ease-in-out infinite;
+    animation-delay: 2.5s;
+    opacity: 0.7;
+  }
+  
+  .animate-node-pulse-3 {
+    animation: node-pulse-3 9s ease-in-out infinite;
+    animation-delay: 5s;
+    opacity: 0.7;
+  }
+  
+  /* Animações de pulso para linhas - 50% mais lentas e 50% mais transparentes */
+  @keyframes line-pulse-1 {
+    0%, 100% { opacity: 0.05; stroke-width: 1; }
+    50% { opacity: 0.35; stroke-width: 1.5; filter: drop-shadow(0 0 1.5px var(--fgv-aux-yellow-1)); }
+  }
+  
+  @keyframes line-pulse-2 {
+    0%, 100% { opacity: 0.04; stroke-width: 1; }
+    40% { opacity: 0.32; stroke-width: 1.5; filter: drop-shadow(0 0 1.5px var(--fgv-aux-orange-1)); }
+  }
+  
+  @keyframes line-pulse-3 {
+    0%, 100% { opacity: 0.06; stroke-width: 1; }
+    60% { opacity: 0.37; stroke-width: 1.5; filter: drop-shadow(0 0 1.5px var(--fgv-aux-yellow-2)); }
+  }
+  
+  .animate-line-pulse-1 {
+    animation: line-pulse-1 10s ease-in-out infinite;
+    opacity: 0.4;
+  }
+  
+  .animate-line-pulse-2 {
+    animation: line-pulse-2 12.8s ease-in-out infinite;
+    animation-delay: 3.2s;
+    opacity: 0.4;
+  }
+  
+  .animate-line-pulse-3 {
+    animation: line-pulse-3 11.2s ease-in-out infinite;
+    animation-delay: 6s;
+    opacity: 0.4;
+  }
+  
+  @keyframes slideUp {
+    from { 
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes pulse-fgv {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+  
+  .animate-pulse-fgv {
+    animation: pulse-fgv 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  /* Animação de pulso para barra de progresso aguardando LLM */
+  @keyframes progress-pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(0, 139, 201, 0.7);
+    }
+    50% {
+      box-shadow: 0 0 0 8px rgba(0, 139, 201, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(0, 139, 201, 0);
+    }
+  }
+  
+  @keyframes progress-shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+  
+  @keyframes progress-glow {
+    0%, 100% {
+      filter: brightness(1);
+    }
+    50% {
+      filter: brightness(1.3);
+    }
+  }
+  
+  .animate-progress-pulse {
+    animation: progress-pulse 1.5s ease-in-out infinite;
+  }
+  
+  .animate-progress-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--fgv-primary-3) 0%,
+      var(--fgv-primary-4) 25%,
+      var(--fgv-primary-3) 50%,
+      var(--fgv-primary-4) 75%,
+      var(--fgv-primary-3) 100%
+    );
+    background-size: 200% 100%;
+    animation: progress-shimmer 2s linear infinite;
+  }
+  
+  .animate-progress-glow {
+    animation: progress-glow 1.5s ease-in-out infinite;
+  }
+  
+  /* Animação de progresso indeterminado */
+  @keyframes progress-indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  
+  .animate-progress-indeterminate {
+    width: 50%;
+    animation: progress-indeterminate 1.5s ease-in-out infinite;
+  }
+  
+  /* Combinação de efeitos para indicar atividade */
+  .progress-bar-active {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .progress-bar-active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.4) 50%,
+      transparent 100%
+    );
+    animation: progress-shimmer 1.5s linear infinite;
+  }
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+      max-width: 1280px;
+    }
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--fgv-secondary-4);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--fgv-secondary-2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fgv-secondary-1);
+}
+
+/* Supporters Carousel Animation */
+@keyframes scroll-logos {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-33.333%);
+  }
+}
+
+.animate-scroll-logos {
+  animation: scroll-logos 20s linear infinite;
+  width: max-content;
+}
+
+.animate-scroll-logos:hover {
+  animation-play-state: paused;
+}
+
+/* Hero Supporters Carousel Animation */
+@keyframes scroll-logos-hero {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-33.333%);
+  }
+}
+
+.animate-scroll-logos-hero {
+  animation: scroll-logos-hero 200s linear infinite;
+  width: max-content;
+}
+
+.animate-scroll-logos-hero:hover {
+  animation-play-state: paused;
+}
+
+/* Stamp Appear Animation - Carimbo */
+@keyframes stamp-appear {
+  0% {
+    opacity: 0;
+    transform: rotate(-20deg) scale(2);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(-10deg) scale(1.1);
+  }
+  70% {
+    transform: rotate(-4deg) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(-6deg) scale(1);
+  }
+}
+
+.animate-stamp-appear {
+  animation: stamp-appear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 1.5s forwards;
+  opacity: 0;
+}
+
+/* Globe Rotation Animation */
+@keyframes globe-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-globe-rotate {
+  animation: globe-rotate 767s linear infinite; /* Rotação 10% mais rápida */
+}
+
+/* Globe Nodes Glow Animation */
+@keyframes globe-nodes-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.4)) drop-shadow(0 0 16px rgba(255, 215, 0, 0.2));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(255, 215, 0, 0.7)) drop-shadow(0 0 32px rgba(255, 215, 0, 0.4)) drop-shadow(0 0 48px rgba(255, 215, 0, 0.2));
+  }
+}
+
+.animate-globe-glow {
+  animation: globe-nodes-glow 4s ease-in-out infinite;
+}
+
+/* Print styles for reports */
+@media print {
+  body {
+    font-family: 'Gotham', 'Inter', sans-serif;
+    color: #000;
+    background: #fff;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+}
+
+/* ==========================================================================
+ * ANIMAÇÕES DE TRANSIÇÃO - Passo 2 Avaliação
+ * ========================================================================== */
+
+/* Animação de fade-in com slide-up suave */
+@keyframes evaluation-section-appear {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animação de fade-in com scale suave */
+@keyframes evaluation-scale-appear {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Animação de brilho suave para destaque */
+@keyframes evaluation-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 139, 201, 0);
+  }
+  50% {
+    box-shadow: 0 0 20px 5px rgba(0, 139, 201, 0.15);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 139, 201, 0);
+  }
+}
+
+/* Classes de animação para seções do Passo 2 */
+.animate-evaluation-section {
+  animation: evaluation-section-appear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.animate-evaluation-section-delay-1 {
+  animation: evaluation-section-appear 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+  opacity: 0;
+}
+
+.animate-evaluation-section-delay-2 {
+  animation: evaluation-section-appear 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+  opacity: 0;
+}
+
+.animate-evaluation-scale {
+  animation: evaluation-scale-appear 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.animate-evaluation-glow {
+  animation: evaluation-glow 1.5s ease-in-out;
+}
+
+/* Animação de checkmark com bounce */
+@keyframes checkmark-bounce {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-checkmark-bounce {
+  animation: checkmark-bounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Animação de linha de progresso completada */
+@keyframes progress-complete {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-progress-complete {
+  background: linear-gradient(90deg, #22c55e, #4ade80, #22c55e);
+  background-size: 200% 100%;
+  animation: progress-complete 1s ease-out forwards;
+}
+
+/* Animação de entrada do parecer */
+@keyframes parecer-appear {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+    border-left-width: 0;
+  }
+  50% {
+    border-left-width: 4px;
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+    border-left-width: 4px;
+  }
+}
+
+.animate-parecer-appear {
+  animation: parecer-appear 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+/* Animação de pulso suave para indicador de conclusão */
+@keyframes completion-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+  }
+}
+
+.animate-completion-pulse {
+  animation: completion-pulse 2s ease-in-out infinite;
+}
+
+/* Animação do carrossel de conselheiros na hero */
+@keyframes carousel {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-carousel {
+  animation: carousel 30s linear infinite;
+}
+
+.animate-carousel:hover {
+  animation-play-state: paused;
+}

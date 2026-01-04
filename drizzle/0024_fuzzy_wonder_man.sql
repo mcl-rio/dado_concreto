@@ -1,0 +1,1 @@
+ALTER TABLE `counselor_llm_config` ADD `displayOrder` int DEFAULT 0 NOT NULL;
