@@ -33,7 +33,14 @@ async function startServer() {
 
   // Health check endpoint for Railway/container orchestrators
   app.get("/health", (_req, res) => {
-    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+    console.log("[Health] /health endpoint called");
+    res.status(200).send("OK");
+  });
+
+  // Log all incoming requests for debugging
+  app.use((req, _res, next) => {
+    console.log(`[Request] ${req.method} ${req.url}`);
+    next();
   });
 
   // Configure body parser with larger size limit for file uploads
