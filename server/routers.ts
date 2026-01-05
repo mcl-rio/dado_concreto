@@ -1,5 +1,6 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router, diretorProcedure, pesquisadorProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
@@ -54,6 +55,100 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+    // Email-based login (no Google OAuth required)
+    loginWithEmail: publicProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input, ctx }) => {
+        const email = input.email.toLowerCase();
+
+        // ADMIN OVERRIDE: Always allow admin email
+        const ADMIN_EMAIL = 'marlos@marlos.com.br';
+        let user = await db.getUserByEmail(email);
+
+        if (email === ADMIN_EMAIL && !user) {
+          // Create admin user automatically
+          await db.upsertUser({
+            openId: `email-admin-${Date.now()}`,
+            email: ADMIN_EMAIL,
+            name: 'Marlos Novaes',
+            role: 'administrador',
+            isActive: true,
+            lastSignedIn: new Date(),
+          });
+          user = await db.getUserByEmail(email);
+        }
+
+        // Check if user exists
+        if (user) {
+          if (!user.isActive) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Sua conta foi desativada.' });
+          }
+          if (user.validUntil && new Date(user.validUntil) < new Date()) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Seu acesso expirou.' });
+          }
+
+          // Create session token
+          const sessionToken = await sdk.createSessionToken(user.openId, {
+            name: user.name || '',
+            expiresInMs: ONE_YEAR_MS,
+          });
+
+          // Set cookie
+          const cookieOptions = getSessionCookieOptions(ctx.req);
+          ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
+          // Update last sign in
+          await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
+
+          return { success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } };
+        }
+
+        // Check if email is invited (first-time login)
+        const invitedUser = await db.getInvitedUserByEmail(email);
+        if (invitedUser) {
+          if (!invitedUser.isActive) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Seu convite foi cancelado.' });
+          }
+          if (invitedUser.validUntil && new Date(invitedUser.validUntil) < new Date()) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Seu convite expirou.' });
+          }
+
+          // Create user from invitation
+          const openId = `email-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+          await db.upsertUser({
+            openId,
+            email: invitedUser.email,
+            name: invitedUser.name,
+            role: invitedUser.role,
+            isActive: true,
+            analysisQuota: invitedUser.analysisQuota,
+            validUntil: invitedUser.validUntil,
+            lastSignedIn: new Date(),
+          });
+
+          const newUser = await db.getUserByEmail(email);
+          if (!newUser) {
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Erro ao criar usuário.' });
+          }
+
+          // Create session token
+          const sessionToken = await sdk.createSessionToken(newUser.openId, {
+            name: newUser.name || '',
+            expiresInMs: ONE_YEAR_MS,
+          });
+
+          // Set cookie
+          const cookieOptions = getSessionCookieOptions(ctx.req);
+          ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
+          return { success: true, user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role } };
+        }
+
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Email não cadastrado. Solicite acesso à coordenação do Conselho.'
+        });
+      }),
   }),
 
   // ============ USER ROUTES ============

@@ -4,6 +4,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NewAnalysis from "./pages/NewAnalysis";
 import AnalysisDetail from "./pages/AnalysisDetail";
@@ -24,6 +25,7 @@ function Router() {
     <PageTransition>
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/login" component={Login} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/analysis/new" component={NewAnalysis} />
         <Route path="/analysis/:id" component={AnalysisDetail} />
