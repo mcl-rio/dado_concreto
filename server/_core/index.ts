@@ -37,6 +37,41 @@ async function startServer() {
     res.status(200).send("OK");
   });
 
+  // Seed database endpoint - importa dados do Manus
+  app.get("/api/seed-database", async (req, res) => {
+    const secret = req.query.secret;
+    if (secret !== "fgv2026") {
+      return res.status(403).send("Acesso negado. Use: /api/seed-database?secret=fgv2026");
+    }
+
+    try {
+      console.log("[Seed] Iniciando importação de dados...");
+      const { seedDatabase } = await import("../seed-runner");
+      await seedDatabase();
+      res.send(`
+        <html>
+        <head><title>Importação Concluída</title></head>
+        <body style="font-family: Arial; padding: 40px; background: #1a1a2e; color: #eee;">
+          <h1 style="color: #4ade80;">✅ Dados importados com sucesso!</h1>
+          <p>Foram importados:</p>
+          <ul>
+            <li>6 usuários convidados</li>
+            <li>6 conselheiros geopolíticos</li>
+            <li>8 configurações LLM</li>
+            <li>4 configurações de temperatura</li>
+            <li>5 preços de modelos</li>
+            <li>3 prompts do sistema</li>
+          </ul>
+          <p><a href="/" style="color: #60a5fa;">Voltar para o app</a></p>
+        </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error("[Seed] Erro:", error);
+      res.status(500).send(`Erro ao importar: ${error}`);
+    }
+  });
+
   // Log all incoming requests for debugging
   app.use((req, _res, next) => {
     console.log(`[Request] ${req.method} ${req.url}`);
