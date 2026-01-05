@@ -5,12 +5,13 @@
 
 import { getDb } from "./db";
 import * as schema from "../drizzle/schema";
+import * as db from "./db";
 
 export async function seedDatabase() {
   console.log("🚀 Iniciando importação de dados do Manus...\n");
 
-  const db = await getDb();
-  if (!db) {
+  const database = await getDb();
+  if (!database) {
     throw new Error("Database not available");
   }
 
@@ -29,7 +30,7 @@ export async function seedDatabase() {
   ];
 
   for (const user of invitedUsersData) {
-    await db.insert(schema.invitedUsers)
+    await database.insert(schema.invitedUsers)
       .values(user)
       .onConflictDoUpdate({
         target: schema.invitedUsers.email,
@@ -71,7 +72,7 @@ export async function seedDatabase() {
       llmProvider: "gemini",
       llmModel: "gemini-2.0-flash-exp",
       isActive: true,
-      isBuiltIn: false,
+      isBuiltIn: true,
       displayOrder: 0,
     },
     {
@@ -87,8 +88,8 @@ export async function seedDatabase() {
       shortBio: "Almirante e estrategista naval americano, teórico do poder marítimo.",
       fullBio: "Alfred Thayer Mahan (1840-1914) foi um oficial da Marinha dos Estados Unidos e historiador naval. Sua obra 'A Influência do Poder Marítimo na História' revolucionou o pensamento estratégico naval e influenciou políticas navais de várias nações.",
       mainTheory: "Teoria do Poder Marítimo - Domínio dos mares como chave para hegemonia global",
-      keyContributions: [],
-      areasOfExpertise: ["Poder naval", "Rotas marítimas", "Projeção de força"],
+      keyContributions: ["Teoria do Poder Marítimo", "Estratégia naval moderna", "Importância das linhas de comunicação marítimas"],
+      areasOfExpertise: ["Poder naval", "Rotas marítimas", "Projeção de força", "Comércio internacional"],
       mainBooks: [
         { title: "The Influence of Sea Power upon History", year: 1890 },
         { title: "The Interest of America in Sea Power", year: 1897 },
@@ -96,10 +97,12 @@ export async function seedDatabase() {
       ],
       personalityTraits: ["Estrategista naval", "Focado em comércio marítimo", "Valoriza bases navais"],
       writingStyle: "Histórico-estratégico, com ênfase em lições do passado para o presente",
+      analysisApproach: "Análise focada em rotas marítimas, bases navais e controle dos mares",
+      keyPhrases: ["O domínio do mar é a chave para o poder mundial", "Quem controla o mar, controla o comércio"],
       llmProvider: "anthropic",
       llmModel: "claude-sonnet-4-20250514",
       isActive: true,
-      isBuiltIn: false,
+      isBuiltIn: true,
       displayOrder: 1,
     },
     {
@@ -115,17 +118,20 @@ export async function seedDatabase() {
       shortBio: "Cientista político e geoestrategista, criador da teoria do Rimland.",
       fullBio: "Nicholas John Spykman (1893-1943) foi um cientista político americano de origem holandesa. Desenvolveu a teoria do Rimland, argumentando que a periferia costeira da Eurásia é mais importante estrategicamente que o Heartland.",
       mainTheory: "Teoria do Rimland - Controle das bordas costeiras da Eurásia",
-      areasOfExpertise: ["Realismo geopolítico", "Contenção", "Zonas costeiras"],
+      keyContributions: ["Teoria do Rimland", "Crítica à teoria do Heartland", "Realismo geopolítico americano"],
+      areasOfExpertise: ["Realismo geopolítico", "Contenção", "Zonas costeiras", "Política de equilíbrio"],
       mainBooks: [
         { title: "America's Strategy in World Politics", year: 1942 },
         { title: "The Geography of the Peace", year: 1944 }
       ],
       personalityTraits: ["Realista pragmático", "Focado em equilíbrio de poder", "Crítico do idealismo"],
       writingStyle: "Direto e analítico, com forte base em relações internacionais",
+      analysisApproach: "Análise focada no equilíbrio de poder e controle das zonas costeiras",
+      keyPhrases: ["Quem controla o Rimland domina a Eurásia", "A geografia é o fator mais fundamental na política externa"],
       llmProvider: "anthropic",
       llmModel: "claude-sonnet-4-20250514",
       isActive: true,
-      isBuiltIn: false,
+      isBuiltIn: true,
       displayOrder: 2,
     },
     {
@@ -141,6 +147,7 @@ export async function seedDatabase() {
       shortBio: "General e geopolítico brasileiro, principal teórico da geopolítica brasileira.",
       fullBio: "General Golbery do Couto e Silva (1911-1987) foi um militar e geopolítico brasileiro, considerado o principal teórico da geopolítica brasileira. Fundador do SNI e ideólogo do regime militar.",
       mainTheory: "Geopolítica Brasileira - Projeção continental e integração nacional",
+      keyContributions: ["Geopolítica brasileira", "Conceito de Brasil-Potência", "Integração nacional"],
       areasOfExpertise: ["Integração nacional", "Projeção sul-americana", "Desenvolvimento como segurança"],
       mainBooks: [
         { title: "Geopolítica do Brasil", year: 1967 },
@@ -149,10 +156,12 @@ export async function seedDatabase() {
       ],
       personalityTraits: ["Estrategista de longo prazo", "Nacionalista", "Focado em desenvolvimento"],
       writingStyle: "Técnico-militar, com visão estratégica do desenvolvimento nacional",
+      analysisApproach: "Análise focada na integração territorial e projeção de poder regional",
+      keyPhrases: ["O Brasil é uma nação continental", "Desenvolvimento e segurança são indissociáveis"],
       llmProvider: "google",
       llmModel: "gemini-2.5-pro-preview-06-05",
       isActive: true,
-      isBuiltIn: false,
+      isBuiltIn: true,
       displayOrder: 3,
     },
     {
@@ -168,6 +177,7 @@ export async function seedDatabase() {
       shortBio: "Diplomata e cientista político, mestre da realpolitik.",
       fullBio: "Henry Kissinger (1923-2023) foi um diplomata e cientista político americano, Secretário de Estado sob Nixon e Ford. Conhecido por sua realpolitik e pela abertura diplomática com a China.",
       mainTheory: "Realpolitik e Equilíbrio de Poder - Diplomacia pragmática baseada em interesses nacionais",
+      keyContributions: ["Realpolitik moderna", "Abertura para a China", "Détente com a URSS"],
       areasOfExpertise: ["Realismo clássico", "Equilíbrio de poder", "Diplomacia de grandes potências"],
       mainBooks: [
         { title: "Diplomacy", year: 1994 },
@@ -177,10 +187,12 @@ export async function seedDatabase() {
       ],
       personalityTraits: ["Pragmático", "Calculista", "Mestre em negociação"],
       writingStyle: "Sofisticado, histórico, com análises de longo prazo sobre ordem mundial",
+      analysisApproach: "Análise baseada em interesses nacionais, equilíbrio de poder e diplomacia pragmática",
+      keyPhrases: ["Diplomacia é a arte do possível", "Não há aliados permanentes, apenas interesses permanentes"],
       llmProvider: "anthropic",
       llmModel: "claude-sonnet-4-20250514",
       isActive: true,
-      isBuiltIn: false,
+      isBuiltIn: true,
       displayOrder: 4,
     },
     {
@@ -210,13 +222,13 @@ export async function seedDatabase() {
       llmProvider: "gemini",
       llmModel: "gemini-2.0-flash-exp",
       isActive: true,
-      isBuiltIn: false,
+      isBuiltIn: true,
       displayOrder: 5,
     },
   ];
 
   for (const counselor of counselorsData) {
-    await db.insert(schema.counselors)
+    await database.insert(schema.counselors)
       .values(counselor)
       .onConflictDoUpdate({
         target: schema.counselors.counselorId,
@@ -229,8 +241,16 @@ export async function seedDatabase() {
           shortBio: counselor.shortBio,
           fullBio: counselor.fullBio,
           mainTheory: counselor.mainTheory,
+          keyContributions: counselor.keyContributions,
+          areasOfExpertise: counselor.areasOfExpertise,
+          mainBooks: counselor.mainBooks,
+          personalityTraits: counselor.personalityTraits,
+          writingStyle: counselor.writingStyle,
+          analysisApproach: counselor.analysisApproach,
+          keyPhrases: counselor.keyPhrases,
           llmProvider: counselor.llmProvider,
           llmModel: counselor.llmModel,
+          isBuiltIn: counselor.isBuiltIn,
         }
       });
   }
@@ -248,16 +268,16 @@ export async function seedDatabase() {
     { counselorId: "golbery", counselorName: "General Golbery do Couto e Silva", llmProvider: "google", llmModel: "gemini-2.5-pro-preview-06-05", displayOrder: 3 },
     { counselorId: "kissinger", counselorName: "Henry Alfred Kissinger", llmProvider: "anthropic", llmModel: "claude-sonnet-4-20250514", displayOrder: 4 },
     { counselorId: "meira-mattos", counselorName: "General Carlos de Meira Mattos", llmProvider: "gemini", llmModel: "gemini-2.0-flash-exp", displayOrder: 5 },
-    { counselorId: "maestro", counselorName: "Maestro", llmProvider: "gemini", llmModel: "gemini-2.0-flash-exp", displayOrder: 100 },
-    { counselorId: "editor", counselorName: "Editor", llmProvider: "gemini", llmModel: "gemini-2.0-flash-exp", displayOrder: 101 },
+    { counselorId: "gennovais", counselorName: "GennovAIs (Coordenador)", llmProvider: "anthropic", llmModel: "claude-sonnet-4-20250514", displayOrder: 100 },
+    { counselorId: "editor", counselorName: "Max Weber (Editor)", llmProvider: "gemini", llmModel: "gemini-2.0-flash-exp", displayOrder: 101 },
   ];
 
   for (const config of llmConfigData) {
-    await db.insert(schema.counselorLlmConfig)
+    await database.insert(schema.counselorLlmConfig)
       .values(config)
       .onConflictDoUpdate({
         target: schema.counselorLlmConfig.counselorId,
-        set: { counselorName: config.counselorName, llmProvider: config.llmProvider, llmModel: config.llmModel }
+        set: { counselorName: config.counselorName, llmProvider: config.llmProvider, llmModel: config.llmModel, displayOrder: config.displayOrder }
       });
   }
   console.log(`   ✅ ${llmConfigData.length} configurações LLM importadas`);
@@ -269,13 +289,13 @@ export async function seedDatabase() {
 
   const temperatureData = [
     { agentType: "counselor", temperature: "0.70", description: "Temperatura para os Conselheiros (mais criatividade)" },
-    { agentType: "gennovais", temperature: "0.50", description: "Temperatura para o General NovAIs (equilibrado)" },
-    { agentType: "editor", temperature: "0.30", description: "Temperatura para o Editor (mais preciso)" },
+    { agentType: "gennovais", temperature: "0.50", description: "Temperatura para o GennovAIs (equilibrado)" },
+    { agentType: "editor", temperature: "0.30", description: "Temperatura para o Max Weber (mais preciso)" },
     { agentType: "default", temperature: "0.50", description: "Temperatura padrão do sistema" },
   ];
 
   for (const temp of temperatureData) {
-    await db.insert(schema.temperatureConfig)
+    await database.insert(schema.temperatureConfig)
       .values(temp)
       .onConflictDoUpdate({
         target: schema.temperatureConfig.agentType,
@@ -285,94 +305,43 @@ export async function seedDatabase() {
   console.log(`   ✅ ${temperatureData.length} configurações de temperatura importadas`);
 
   // =====================================================
-  // 5. PREÇOS LLM
+  // 5. PREÇOS LLM (com upsert correto)
   // =====================================================
   console.log("💰 Importando preços dos modelos LLM...");
 
   const pricingData = [
-    { provider: "google", modelName: "gemini-2.0-flash-exp", displayName: "Gemini 2.0 Flash", inputPricePerMillion: "0.075", outputPricePerMillion: "0.30" },
-    { provider: "google", modelName: "gemini-2.5-pro-preview-06-05", displayName: "Gemini 2.5 Pro", inputPricePerMillion: "1.25", outputPricePerMillion: "10.00" },
-    { provider: "anthropic", modelName: "claude-sonnet-4-20250514", displayName: "Claude Sonnet 4", inputPricePerMillion: "3.00", outputPricePerMillion: "15.00" },
-    { provider: "deepseek", modelName: "deepseek-chat", displayName: "DeepSeek Chat", inputPricePerMillion: "0.14", outputPricePerMillion: "0.28" },
-    { provider: "openai", modelName: "gpt-4o", displayName: "GPT-4o", inputPricePerMillion: "2.50", outputPricePerMillion: "10.00" },
+    { provider: "google", modelName: "gemini-2.0-flash-exp", displayName: "Gemini 2.0 Flash (Experimental)", inputPricePerMillion: "0.075", outputPricePerMillion: "0.30", isActive: true },
+    { provider: "google", modelName: "gemini-2.5-pro-preview-06-05", displayName: "Gemini 2.5 Pro (Preview)", inputPricePerMillion: "1.25", outputPricePerMillion: "10.00", isActive: true },
+    { provider: "anthropic", modelName: "claude-sonnet-4-20250514", displayName: "Claude Sonnet 4", inputPricePerMillion: "3.00", outputPricePerMillion: "15.00", isActive: true },
+    { provider: "anthropic", modelName: "claude-3-5-sonnet-20241022", displayName: "Claude 3.5 Sonnet", inputPricePerMillion: "3.00", outputPricePerMillion: "15.00", isActive: true },
+    { provider: "deepseek", modelName: "deepseek-chat", displayName: "DeepSeek Chat", inputPricePerMillion: "0.14", outputPricePerMillion: "0.28", isActive: true },
+    { provider: "openai", modelName: "gpt-4o", displayName: "GPT-4o", inputPricePerMillion: "2.50", outputPricePerMillion: "10.00", isActive: true },
+    { provider: "openai", modelName: "gpt-4o-mini", displayName: "GPT-4o Mini", inputPricePerMillion: "0.15", outputPricePerMillion: "0.60", isActive: true },
   ];
 
+  // Usar função do db.ts que lida com upsert corretamente
   for (const price of pricingData) {
-    try {
-      await db.insert(schema.llmPricing).values(price);
-    } catch {
-      // Ignora se já existe
-    }
+    await db.createLlmPricing(price);
   }
   console.log(`   ✅ ${pricingData.length} preços de modelos importados`);
 
   // =====================================================
-  // 6. SYSTEM PROMPTS
+  // 6. SYSTEM PROMPTS (usar função existente do app)
   // =====================================================
-  console.log("📝 Importando prompts do sistema...");
+  console.log("📝 Inicializando prompts do sistema...");
 
-  const promptsData = [
-    {
-      promptKey: "novaes_evaluator",
-      promptName: "General Novaes - Avaliador",
-      description: "Prompt do General Novaes que avalia a qualidade dos pareceres elaborados pelos Conselheiros.",
-      promptContent: `Você é o GenNovAIs, Coordenador do Conselho de Geopolítica a FGV. Você é um general de exército direto, culto e avesso a 'embustes'. Sua missão é redigir os pareceres de avaliação dos projetos de pesquisas submetidos pelos usuários.
+  // Usar a função existente que cria TODOS os prompts necessários
+  await db.initializeDefaultSystemPrompts();
+  console.log("   ✅ Prompts do sistema inicializados");
 
-Sua avaliação deve considerar:
-1. Relevância geopolítica do tema
-2. Viabilidade da análise com as fontes disponíveis
-3. Clareza e precisão do objetivo
-4. Adequação ao escopo do Conselho (geopolítica, relações internacionais, estratégia)
-
-Seja rigoroso mas construtivo. Use linguagem militar direta.`,
-      defaultContent: "Você é o General Novaes, Coordenador do Conselho de Geopolítica da FGV.",
-      category: "evaluation" as const,
-    },
-    {
-      promptKey: "editor_consolidator",
-      promptName: "Editor-Chefe - Consolidador",
-      description: "Prompt do Editor-Chefe que consolida os pareceres aprovados dos Conselheiros em um único relatório final.",
-      promptContent: `Você é o Editor-Chefe do Conselho de Geopolítica da FGV. Sua função é consolidar os pareceres aprovados dos Conselheiros em um único relatório final.
-
-REGRAS OBRIGATÓRIAS:
-1. O relatório final NÃO DEVE mencionar os nomes dos Conselheiros
-2. O relatório DEVE seguir a estrutura aprovada pelo usuário
-3. Integre as diferentes perspectivas de forma coesa e fluida
-4. Mantenha o estilo discursivo (texto corrido, sem bullet points)
-5. Garanta qualidade acadêmica compatível com publicações da FGV
-
-Responda sempre em português do Brasil, com excelência acadêmica.`,
-      defaultContent: "Você é o Editor-Chefe do Conselho de Geopolítica da FGV.",
-      category: "agent" as const,
-    },
-    {
-      promptKey: "counselor_task",
-      promptName: "Tarefa do Conselheiro",
-      description: "Template de tarefa enviado para cada Conselheiro elaborar seu parecer.",
-      promptContent: `Como {COUNSELOR_NAME}, especialista em {KEY_THEORY}, elabore seu parecer sobre o tema proposto.
-
-INSTRUÇÕES:
-1. Leia TODAS as fontes fornecidas cuidadosamente
-2. Aplique sua perspectiva teórica específica ({KEY_THEORY})
-3. Escreva em TEXTO CORRIDO, DISCURSIVO
-4. NUNCA use bullet points
-5. Seja OBJETIVO e DIRETO na redação
-
-Seu parecer deve ser denso, profundo e revelar seu conhecimento como um dos maiores pensadores geopolíticos da história.`,
-      defaultContent: "Como {COUNSELOR_NAME}, especialista em {KEY_THEORY}, elabore seu parecer.",
-      category: "task" as const,
-    },
-  ];
-
-  for (const prompt of promptsData) {
-    await db.insert(schema.systemPrompts)
-      .values(prompt)
-      .onConflictDoUpdate({
-        target: schema.systemPrompts.promptKey,
-        set: { promptName: prompt.promptName, promptContent: prompt.promptContent }
-      });
-  }
-  console.log(`   ✅ ${promptsData.length} prompts do sistema importados`);
-
-  console.log("\n✅ IMPORTAÇÃO CONCLUÍDA COM SUCESSO!");
+  console.log("\n═══════════════════════════════════════════════════════");
+  console.log("✅ IMPORTAÇÃO CONCLUÍDA COM SUCESSO!");
+  console.log("═══════════════════════════════════════════════════════");
+  console.log("\nDados importados:");
+  console.log("  • 6 usuários convidados");
+  console.log("  • 6 conselheiros geopolíticos");
+  console.log("  • 8 configurações LLM");
+  console.log("  • 4 configurações de temperatura");
+  console.log("  • 7 preços de modelos LLM");
+  console.log("  • Todos os prompts do sistema");
 }
