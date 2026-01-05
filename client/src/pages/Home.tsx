@@ -139,7 +139,7 @@ export default function Home() {
     if (isAuthenticated) {
       navigate("/analysis/new");
     } else {
-      setShowEmailDialog(true);
+      navigate("/login");
     }
   };
 
