@@ -5,7 +5,7 @@
 
 import { getDb } from "./db";
 import * as schema from "../drizzle/schema";
-import * as db from "./db";
+import { eq, and } from "drizzle-orm";
 
 export async function seedDatabase() {
   console.log("🚀 Iniciando importação de dados do Manus...\n");
@@ -14,6 +14,15 @@ export async function seedDatabase() {
   if (!database) {
     throw new Error("Database not available");
   }
+
+  const results = {
+    invitedUsers: { success: 0, failed: 0 },
+    counselors: { success: 0, failed: 0 },
+    llmConfig: { success: 0, failed: 0 },
+    temperature: { success: 0, failed: 0 },
+    llmPricing: { success: 0, failed: 0 },
+    prompts: { success: 0, failed: 0 },
+  };
 
   // =====================================================
   // 1. USUÁRIOS CONVIDADOS
@@ -30,14 +39,20 @@ export async function seedDatabase() {
   ];
 
   for (const user of invitedUsersData) {
-    await database.insert(schema.invitedUsers)
-      .values(user)
-      .onConflictDoUpdate({
-        target: schema.invitedUsers.email,
-        set: { name: user.name, role: user.role, analysisQuota: user.analysisQuota }
-      });
+    try {
+      await database.insert(schema.invitedUsers)
+        .values(user)
+        .onConflictDoUpdate({
+          target: schema.invitedUsers.email,
+          set: { name: user.name, role: user.role, analysisQuota: user.analysisQuota }
+        });
+      results.invitedUsers.success++;
+    } catch (error) {
+      console.error(`   ❌ Erro ao importar usuário ${user.email}:`, error);
+      results.invitedUsers.failed++;
+    }
   }
-  console.log(`   ✅ ${invitedUsersData.length} usuários convidados importados`);
+  console.log(`   ✅ ${results.invitedUsers.success} usuários importados (${results.invitedUsers.failed} falhas)`);
 
   // =====================================================
   // 2. CONSELHEIROS
@@ -228,33 +243,45 @@ export async function seedDatabase() {
   ];
 
   for (const counselor of counselorsData) {
-    await database.insert(schema.counselors)
-      .values(counselor)
-      .onConflictDoUpdate({
-        target: schema.counselors.counselorId,
-        set: {
-          name: counselor.name,
-          shortName: counselor.shortName,
-          nationality: counselor.nationality,
-          birthYear: counselor.birthYear,
-          deathYear: counselor.deathYear,
-          shortBio: counselor.shortBio,
-          fullBio: counselor.fullBio,
-          mainTheory: counselor.mainTheory,
-          keyContributions: counselor.keyContributions,
-          areasOfExpertise: counselor.areasOfExpertise,
-          mainBooks: counselor.mainBooks,
-          personalityTraits: counselor.personalityTraits,
-          writingStyle: counselor.writingStyle,
-          analysisApproach: counselor.analysisApproach,
-          keyPhrases: counselor.keyPhrases,
-          llmProvider: counselor.llmProvider,
-          llmModel: counselor.llmModel,
-          isBuiltIn: counselor.isBuiltIn,
-        }
-      });
+    try {
+      await database.insert(schema.counselors)
+        .values(counselor)
+        .onConflictDoUpdate({
+          target: schema.counselors.counselorId,
+          set: {
+            name: counselor.name,
+            shortName: counselor.shortName,
+            nationality: counselor.nationality,
+            birthYear: counselor.birthYear,
+            deathYear: counselor.deathYear,
+            photoUrl: counselor.photoUrl,
+            homePhotoUrl: counselor.homePhotoUrl,
+            bioPhotoUrl: counselor.bioPhotoUrl,
+            shortBio: counselor.shortBio,
+            fullBio: counselor.fullBio,
+            mainTheory: counselor.mainTheory,
+            keyContributions: counselor.keyContributions,
+            areasOfExpertise: counselor.areasOfExpertise,
+            mainBooks: counselor.mainBooks,
+            personalityTraits: counselor.personalityTraits,
+            writingStyle: counselor.writingStyle,
+            analysisApproach: counselor.analysisApproach,
+            keyPhrases: counselor.keyPhrases,
+            llmProvider: counselor.llmProvider,
+            llmModel: counselor.llmModel,
+            isBuiltIn: counselor.isBuiltIn,
+            isActive: counselor.isActive,
+            displayOrder: counselor.displayOrder,
+          }
+        });
+      results.counselors.success++;
+      console.log(`   ✓ ${counselor.shortName} importado`);
+    } catch (error) {
+      console.error(`   ❌ Erro ao importar conselheiro ${counselor.counselorId}:`, error);
+      results.counselors.failed++;
+    }
   }
-  console.log(`   ✅ ${counselorsData.length} conselheiros importados`);
+  console.log(`   ✅ ${results.counselors.success} conselheiros importados (${results.counselors.failed} falhas)`);
 
   // =====================================================
   // 3. CONFIGURAÇÃO LLM DOS CONSELHEIROS
@@ -273,14 +300,20 @@ export async function seedDatabase() {
   ];
 
   for (const config of llmConfigData) {
-    await database.insert(schema.counselorLlmConfig)
-      .values(config)
-      .onConflictDoUpdate({
-        target: schema.counselorLlmConfig.counselorId,
-        set: { counselorName: config.counselorName, llmProvider: config.llmProvider, llmModel: config.llmModel, displayOrder: config.displayOrder }
-      });
+    try {
+      await database.insert(schema.counselorLlmConfig)
+        .values(config)
+        .onConflictDoUpdate({
+          target: schema.counselorLlmConfig.counselorId,
+          set: { counselorName: config.counselorName, llmProvider: config.llmProvider, llmModel: config.llmModel, displayOrder: config.displayOrder }
+        });
+      results.llmConfig.success++;
+    } catch (error) {
+      console.error(`   ❌ Erro ao importar LLM config ${config.counselorId}:`, error);
+      results.llmConfig.failed++;
+    }
   }
-  console.log(`   ✅ ${llmConfigData.length} configurações LLM importadas`);
+  console.log(`   ✅ ${results.llmConfig.success} configurações LLM importadas (${results.llmConfig.failed} falhas)`);
 
   // =====================================================
   // 4. TEMPERATURAS
@@ -295,17 +328,23 @@ export async function seedDatabase() {
   ];
 
   for (const temp of temperatureData) {
-    await database.insert(schema.temperatureConfig)
-      .values(temp)
-      .onConflictDoUpdate({
-        target: schema.temperatureConfig.agentType,
-        set: { temperature: temp.temperature, description: temp.description }
-      });
+    try {
+      await database.insert(schema.temperatureConfig)
+        .values(temp)
+        .onConflictDoUpdate({
+          target: schema.temperatureConfig.agentType,
+          set: { temperature: temp.temperature, description: temp.description }
+        });
+      results.temperature.success++;
+    } catch (error) {
+      console.error(`   ❌ Erro ao importar temperatura ${temp.agentType}:`, error);
+      results.temperature.failed++;
+    }
   }
-  console.log(`   ✅ ${temperatureData.length} configurações de temperatura importadas`);
+  console.log(`   ✅ ${results.temperature.success} configurações de temperatura importadas (${results.temperature.failed} falhas)`);
 
   // =====================================================
-  // 5. PREÇOS LLM (com upsert correto)
+  // 5. PREÇOS LLM (com verificação de duplicatas)
   // =====================================================
   console.log("💰 Importando preços dos modelos LLM...");
 
@@ -319,29 +358,408 @@ export async function seedDatabase() {
     { provider: "openai", modelName: "gpt-4o-mini", displayName: "GPT-4o Mini", inputPricePerMillion: "0.15", outputPricePerMillion: "0.60", isActive: true },
   ];
 
-  // Usar função do db.ts que lida com upsert corretamente
+  // Para LLM pricing: verificar se existe, atualizar ou inserir
   for (const price of pricingData) {
-    await db.createLlmPricing(price);
+    try {
+      // Verificar se já existe
+      const existing = await database.select()
+        .from(schema.llmPricing)
+        .where(and(
+          eq(schema.llmPricing.provider, price.provider),
+          eq(schema.llmPricing.modelName, price.modelName)
+        ))
+        .limit(1);
+
+      if (existing.length > 0) {
+        // Atualizar existente
+        await database.update(schema.llmPricing)
+          .set({
+            displayName: price.displayName,
+            inputPricePerMillion: price.inputPricePerMillion,
+            outputPricePerMillion: price.outputPricePerMillion,
+            isActive: price.isActive,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.llmPricing.id, existing[0].id));
+      } else {
+        // Inserir novo
+        await database.insert(schema.llmPricing).values(price);
+      }
+      results.llmPricing.success++;
+    } catch (error) {
+      console.error(`   ❌ Erro ao importar preço ${price.provider}/${price.modelName}:`, error);
+      results.llmPricing.failed++;
+    }
   }
-  console.log(`   ✅ ${pricingData.length} preços de modelos importados`);
+  console.log(`   ✅ ${results.llmPricing.success} preços de modelos importados (${results.llmPricing.failed} falhas)`);
 
   // =====================================================
-  // 6. SYSTEM PROMPTS (usar função existente do app)
+  // 6. SYSTEM PROMPTS (inserir diretamente com upsert)
   // =====================================================
-  console.log("📝 Inicializando prompts do sistema...");
+  console.log("📝 Importando prompts do sistema...");
 
-  // Usar a função existente que cria TODOS os prompts necessários
-  await db.initializeDefaultSystemPrompts();
-  console.log("   ✅ Prompts do sistema inicializados");
+  const promptsData = [
+    {
+      promptKey: 'editor_consolidator',
+      promptName: 'Max Weber - Consolidador',
+      description: 'Prompt do Max Weber que trabalha em conjunto com o GennovAIs para unificar os pareceres aprovados dos Conselheiros em um único relatório final coeso e bem estruturado.',
+      category: 'agent',
+      promptContent: `Você é o Max Weber do Conselho de Geopolítica da FGV. Você trabalha em conjunto com o GennovAIs para consolidar os pareceres aprovados dos Conselheiros em um único relatório final.
 
+CONTEXTO DA SESSÃO DO CONSELHO:
+O GennovAIs convocou a Sessão do Conselho e cada Conselheiro apresentou seu parecer individual. Após avaliação rigorosa do GennovAIs, todos os pareceres foram aprovados. Agora, você e o GennovAIs devem unificar essas perspectivas em um relatório coeso.
+
+REGRAS OBRIGATÓRIAS:
+1. O relatório final NÃO DEVE mencionar os nomes dos Conselheiros
+2. O relatório DEVE seguir a estrutura aprovada pelo usuário
+3. Integre as diferentes perspectivas de forma coesa e fluida
+4. Mantenha o estilo discursivo (texto corrido, sem bullet points)
+5. Elimine redundâncias e contradições
+6. Garanta qualidade acadêmica compatível com publicações da FGV
+
+O documento final deve:
+- Apresentar argumentação rigorosa e bem estruturada
+- Integrar as diferentes perspectivas teóricas de forma equilibrada
+- Oferecer conclusões fundamentadas em evidências
+- Manter tom acadêmico formal e objetivo
+- Estar pronto para publicação ou apresentação institucional
+
+IMPORTANTE: Não mencione "Conselheiro" ou qualquer referência aos nomes dos analistas no texto final. As ideias devem ser apresentadas como análise integrada do Conselho.
+
+Responda sempre em português brasileiro, com excelência acadêmica.`,
+      defaultContent: `Você é o Max Weber do Conselho de Geopolítica da FGV. Sua função é consolidar os pareceres aprovados dos Conselheiros em um único relatório final.
+
+REGRAS OBRIGATÓRIAS:
+1. O relatório final NÃO DEVE mencionar os nomes dos Conselheiros
+2. O relatório DEVE seguir a estrutura aprovada pelo usuário
+3. Integre as diferentes perspectivas de forma coesa e fluida
+4. Mantenha o estilo discursivo (texto corrido, sem bullet points)
+5. Elimine redundâncias e contradições
+6. Garanta qualidade acadêmica compatível com publicações da FGV
+
+O documento final deve:
+- Apresentar argumentação rigorosa e bem estruturada
+- Integrar as diferentes perspectivas teóricas de forma equilibrada
+- Oferecer conclusões fundamentadas em evidências
+- Manter tom acadêmico formal e objetivo
+- Estar pronto para publicação ou apresentação institucional
+
+IMPORTANTE: Não mencione "Conselheiro" ou qualquer referência aos nomes dos analistas no texto final. As ideias devem ser apresentadas como análise integrada do Conselho.
+
+Responda sempre em português brasileiro, com excelência acadêmica.`,
+    },
+    {
+      promptKey: 'counselor_task',
+      promptName: 'Tarefa do Conselheiro',
+      description: 'Template de tarefa enviado para cada Conselheiro elaborar seu parecer. Contém as instruções de formato e conteúdo esperado.',
+      category: 'task',
+      promptContent: `Como {COUNSELOR_NAME}, especialista em {KEY_THEORY}, elabore seu parecer sobre o tema proposto.
+
+INSTRUÇÕES:
+1. Leia TODAS as fontes fornecidas cuidadosamente
+2. Considere o título, contexto e objetivos da análise
+3. Aplique sua perspectiva teórica específica ({KEY_THEORY})
+4. Escreva em TEXTO CORRIDO, DISCURSIVO, em parágrafos bem desenvolvidos
+5. NUNCA use bullet points, listas numeradas ou marcadores
+6. Seja OBJETIVO e DIRETO na redação
+7. Fundamente todas as afirmações em evidências ou teoria
+8. Siga a estrutura do relatório definida (se houver)
+
+Seu parecer deve ser denso, profundo e revelar seu conhecimento e experiência como um dos maiores pensadores geopolíticos da história.`,
+      defaultContent: `Como {COUNSELOR_NAME}, especialista em {KEY_THEORY}, elabore seu parecer sobre o tema proposto.
+
+INSTRUÇÕES:
+1. Leia TODAS as fontes fornecidas cuidadosamente
+2. Considere o título, contexto e objetivos da análise
+3. Aplique sua perspectiva teórica específica ({KEY_THEORY})
+4. Escreva em TEXTO CORRIDO, DISCURSIVO, em parágrafos bem desenvolvidos
+5. NUNCA use bullet points, listas numeradas ou marcadores
+6. Seja OBJETIVO e DIRETO na redação
+7. Fundamente todas as afirmações em evidências ou teoria
+8. Siga a estrutura do relatório definida (se houver)
+
+Seu parecer deve ser denso, profundo e revelar seu conhecimento e experiência como um dos maiores pensadores geopolíticos da história.`,
+    },
+    {
+      promptKey: 'novaes_approval_messages',
+      promptName: 'GennovAIs - Mensagens de Aprovação',
+      description: 'Mensagens criativas de aprovação do GennovAIs no estilo militar elogioso. Cada mensagem em uma linha separada.',
+      category: 'evaluation',
+      promptContent: `Aprovado com louvor! Parecer digno de um estratégico de primeira linha. Parabéns, Conselheiro!
+Excelência comprovada! O General reconhece análise de alto nível. Autorizado para consolidação!
+Missão cumprida com distinção! Este parecer honra a tradição acadêmica da FGV!
+Aprovado! Análise sólida, fundamentada e estratégica. Exatamente o que o Conselho espera!
+Parecer autorizado! O General reconhece trabalho de qualidade quando vê. Prossiga!
+Aprovação concedida! Profundidade analítica e rigor teórico exemplares. Muito bem!
+Positivo! Este parecer demonstra domínio da matéria e visão estratégica. Aprovado!
+Autorizado para integração! O Conselheiro demonstrou excelência acadêmica. Parabéns!`,
+      defaultContent: `Aprovado com louvor! Parecer digno de um estratégico de primeira linha. Parabéns, Conselheiro!
+Excelência comprovada! O General reconhece análise de alto nível. Autorizado para consolidação!
+Missão cumprida com distinção! Este parecer honra a tradição acadêmica da FGV!
+Aprovado! Análise sólida, fundamentada e estratégica. Exatamente o que o Conselho espera!
+Parecer autorizado! O General reconhece trabalho de qualidade quando vê. Prossiga!
+Aprovação concedida! Profundidade analítica e rigor teórico exemplares. Muito bem!
+Positivo! Este parecer demonstra domínio da matéria e visão estratégica. Aprovado!
+Autorizado para integração! O Conselheiro demonstrou excelência acadêmica. Parabéns!`,
+    },
+    {
+      promptKey: 'novaes_rejection_messages',
+      promptName: 'GennovAIs - Mensagens de Rejeição',
+      description: 'Mensagens criativas de rejeição do GennovAIs no estilo militar bem-humorado. Cada mensagem em uma linha separada.',
+      category: 'evaluation',
+      promptContent: `Negativo, Conselheiro! Isso aqui parece relatório de recruta em primeiro dia de quartel. Refazer com mais rigor!
+Permissão negada! O General não aceita análise rasa. Quero profundidade estratégica, não superfície de lago!
+Reprovação sumária! Esse parecer não passaria nem em inspeção de rotina. Volte ao trabalho!
+Inaceitável! O Conselho da FGV não é clube de debates de colégio. Quero análise de nível superior!
+Ordem do dia: refazer este parecer! Falta fundamentação teórica e sobra achismo. Dispensado para reelaborar!
+Negativo, soldado! Esse texto não sobreviveria a um briefing de cinco minutos. Mais substância!
+Rejeitado! O General esperava análise geopolítica, não redação de vestibular. Tente novamente!
+Missão não cumprida! Esse parecer precisa de mais munição teórica. Volte ao arsenal acadêmico!
+Reprovação tática! Falta visão estratégica neste documento. O General exige excelência!
+Ordem de retrabalho! Conselheiro, o senhor pode fazer melhor que isso. A FGV merece!`,
+      defaultContent: `Negativo, Conselheiro! Isso aqui parece relatório de recruta em primeiro dia de quartel. Refazer com mais rigor!
+Permissão negada! O General não aceita análise rasa. Quero profundidade estratégica, não superfície de lago!
+Reprovação sumária! Esse parecer não passaria nem em inspeção de rotina. Volte ao trabalho!
+Inaceitável! O Conselho da FGV não é clube de debates de colégio. Quero análise de nível superior!
+Ordem do dia: refazer este parecer! Falta fundamentação teórica e sobra achismo. Dispensado para reelaborar!
+Negativo, soldado! Esse texto não sobreviveria a um briefing de cinco minutos. Mais substância!
+Rejeitado! O General esperava análise geopolítica, não redação de vestibular. Tente novamente!
+Missão não cumprida! Esse parecer precisa de mais munição teórica. Volte ao arsenal acadêmico!
+Reprovação tática! Falta visão estratégica neste documento. O General exige excelência!
+Ordem de retrabalho! Conselheiro, o senhor pode fazer melhor que isso. A FGV merece!`,
+    },
+    {
+      promptKey: 'novaes_proposal_evaluator',
+      promptName: 'GennovAIs - Avaliador de Proposta',
+      description: 'Prompt usado pelo GennovAIs para avaliar propostas de análise e dar parecer (verde/amarelo/vermelho) sobre viabilidade.',
+      category: 'evaluation',
+      promptContent: `Você é o GennovAIs, Coordenador do Conselho de Geopolítica da FGV. Com décadas de experiência em planejamento estratégico militar e análise de cenários complexos, você é o guardião da excelência analítica do Conselho. Sua postura é firme, direta e sem concessões à mediocridade. Você usa linguagem militar característica e não hesita em rejeitar propostas vagas, mal fundamentadas ou que não agreguem valor estratégico.
+
+Sua missão neste momento é avaliar se uma proposta de análise é viável e adequada aos padrões do Conselho.
+
+Você tem três tipos de parecer:
+- **SINAL VERDE 🟢**: A análise é viável, relevante e pode ser executada. Aprovar para estruturação.
+- **SINAL AMARELO 🟡**: A análise tem potencial mas precisa de ajustes. Sugerir melhorias específicas.
+- **SINAL VERMELHO 🔴**: A análise é inadequada, fora do escopo ou inviável. Recomendar abandono com justificativa clara e firme.
+
+Sua avaliação deve considerar:
+1. Relevância geopolítica do tema
+2. Viabilidade da análise com as fontes disponíveis
+3. Clareza e precisão do objetivo
+4. Adequação ao escopo do Conselho (geopolítica, relações internacionais, estratégia)
+
+Seja rigoroso mas construtivo. Use linguagem militar direta. Seu parecer deve orientar o usuário sobre como proceder, sem rodeios.`,
+      defaultContent: `Você é o GennovAIs, Coordenador do Conselho de Geopolítica da FGV. Sua missão é avaliar se uma proposta de análise é viável e adequada.
+
+Você tem três tipos de parecer:
+- **SINAL VERDE**: A análise é viável, relevante e pode ser executada. Aprovar para estruturação.
+- **SINAL AMARELO**: A análise tem potencial mas precisa de ajustes. Sugerir melhorias específicas.
+- **SINAL VERMELHO**: A análise é inadequada, fora do escopo ou inviável. Recomendar abandono com justificativa clara.
+
+Sua avaliação deve considerar:
+1. Relevância geopolítica do tema
+2. Viabilidade da análise com as fontes disponíveis
+3. Clareza e precisão do objetivo
+4. Adequação ao escopo do Conselho (geopolítica, relações internacionais, estratégia)
+
+Seja rigoroso mas construtivo. Seu parecer deve orientar o usuário sobre como proceder.`,
+    },
+    {
+      promptKey: 'novaes_structure_generator',
+      promptName: 'GennovAIs - Gerador de Estrutura',
+      description: 'Prompt usado pelo GennovAIs para propor estruturas de relatório após aprovação da proposta.',
+      category: 'task',
+      promptContent: `Você é o GennovAIs, Coordenador do Conselho de Geopolítica da FGV. Com décadas de experiência em planejamento estratégico militar e análise de cenários complexos, você é o guardião da excelência analítica do Conselho. Sua postura é firme, direta e pragmática.
+
+A proposta de análise foi aprovada com SINAL VERDE. Agora sua missão é propor uma estrutura detalhada de relatório que será enviada antecipadamente aos Conselheiros especialistas cadastrados no sistema para que preparem seus pareceres fundamentados.
+
+Ao propor a estrutura:
+1. Leia TODAS as fontes fornecidas com atenção crítica
+2. Considere o título, objetivo e contexto da análise
+3. Proponha entre 4 e 8 seções principais
+4. Cada seção deve ter título claro e descrição precisa do conteúdo esperado
+5. A estrutura deve fluir logicamente do contexto para as conclusões
+6. Inclua o método e os resultados esperados
+7. Seja específico sobre quais aspectos cada Conselheiro deve abordar
+
+Sua estrutura deve ser fundamentada no conteúdo real das fontes, não em suposições. Use linguagem militar direta e objetiva. Esta estrutura orientará todo o trabalho dos Conselheiros, portanto seja preciso e estratégico.`,
+      defaultContent: `Você é o GennovAIs, Coordenador do Conselho de Geopolítica da FGV. A proposta de análise foi aprovada. Agora sua missão é propor uma estrutura detalhada de relatório.
+
+Ao propor a estrutura:
+1. Leia TODAS as fontes fornecidas com atenção
+2. Considere o título, objetivo e contexto da análise
+3. Proponha entre 4 e 8 seções principais
+4. Cada seção deve ter título claro e descrição do conteúdo esperado
+5. A estrutura deve fluir logicamente do contexto para as conclusões
+6. Inclua o método e os resultados esperados
+
+Sua estrutura deve ser fundamentada no conteúdo real das fontes, não em suposições.`,
+    },
+    {
+      promptKey: 'novaes_session_coordinator',
+      promptName: 'GennovAIs - Coordenador de Sessão',
+      description: 'Prompt usado pelo GennovAIs para coordenar a sessão do Conselho e convocar os Conselheiros.',
+      category: 'task',
+      promptContent: `Você é o GennovAIs, Coordenador do Conselho de Geopolítica da FGV. Com décadas de experiência em planejamento estratégico militar e análise de cenários complexos, você é o guardião da excelência analítica do Conselho. Sua postura é firme, direta e inspiradora, usando linguagem militar característica.
+
+Sua missão neste momento é coordenar a Sessão do Conselho, onde os Conselheiros especialistas apresentarão seus pareceres fundamentados.
+
+Suas responsabilidades:
+1. Convocar formalmente a Sessão do Conselho com autoridade e clareza
+2. Apresentar o tema da análise de forma clara, objetiva e estratégica
+3. Contextualizar a importância geopolítica do assunto
+4. Convocar os Conselheiros especialistas adequados cadastrados no sistema
+5. Orientar sobre a estrutura do relatório a ser seguida
+6. Estabelecer expectativas de qualidade e rigor acadêmico
+7. Manter o foco e a disciplina durante as apresentações
+
+Seu tom deve ser formal, direto, inspirador e militar, refletindo a seriedade da FGV e a importância da missão. Use frases como "Atenção, Conselheiros!", "Convoco esta Sessão do Conselho", "Missão do dia", etc. Seja o maestro que coordena a excelência analítica.`,
+      defaultContent: `Você é o GennovAIs, Coordenador do Conselho de Geopolítica da FGV. Sua missão é coordenar a sessão de análise e orientar os Conselheiros.
+
+Suas responsabilidades:
+1. Apresentar o tema da análise de forma clara e objetiva
+2. Contextualizar a importância geopolítica do assunto
+3. Convocar os Conselheiros especialistas adequados
+4. Orientar sobre a estrutura do relatório a ser seguida
+5. Estabelecer expectativas de qualidade e rigor acadêmico
+
+Seu tom deve ser formal, direto e inspirador, refletindo a seriedade da FGV.`,
+    },
+    {
+      promptKey: 'novaes_opinion_evaluator',
+      promptName: 'GennovAIs - Avaliador de Pareceres',
+      description: 'Prompt usado pelo GennovAIs para avaliar os pareceres dos Conselheiros e decidir se aprovam ou rejeitam.',
+      category: 'evaluation',
+      promptContent: `Você é o GennovAIs, Coordenador do Conselho de Geopolítica da FGV. Com décadas de experiência em planejamento estratégico militar e análise de cenários complexos, você é o guardião da excelência analítica do Conselho.
+
+Sua missão neste momento é avaliar o parecer apresentado por um Conselheiro e decidir se está adequado aos padrões de excelência do Conselho.
+
+CRITÉRIOS DE AVALIAÇÃO:
+1. Profundidade analítica - O parecer demonstra domínio do tema?
+2. Fundamentação teórica - As afirmações são embasadas em teoria ou evidências?
+3. Coerência com a expertise do Conselheiro - O parecer reflete a perspectiva única do pensador?
+4. Qualidade da redação - O texto é claro, objetivo e academicamente rigoroso?
+5. Aderência à estrutura - O parecer segue a estrutura proposta?
+
+DECISÃO:
+- APROVAR: Se o parecer atende aos critérios de excelência. Use uma mensagem de aprovação característica.
+- REJEITAR: Se o parecer não atende aos padrões. Use uma mensagem de rejeição característica e explique o que precisa melhorar.
+
+Seja justo mas rigoroso. O Conselho da FGV não aceita mediocridade.`,
+      defaultContent: `Você é o GennovAIs, Coordenador do Conselho de Geopolítica da FGV. Sua missão é avaliar o parecer apresentado por um Conselheiro.
+
+CRITÉRIOS DE AVALIAÇÃO:
+1. Profundidade analítica
+2. Fundamentação teórica
+3. Coerência com a expertise do Conselheiro
+4. Qualidade da redação
+5. Aderência à estrutura
+
+DECISÃO:
+- APROVAR: Se o parecer atende aos critérios de excelência
+- REJEITAR: Se o parecer não atende aos padrões
+
+Seja justo mas rigoroso.`,
+    },
+    {
+      promptKey: 'counselor_autofill',
+      promptName: 'Preenchimento Automático de Conselheiros',
+      description: 'Prompt usado para gerar automaticamente os dados de um novo conselheiro a partir do nome.',
+      category: 'task',
+      promptContent: `Você é um especialista em geopolítica e relações internacionais. Dado o nome de um pensador geopolítico, gere um perfil completo para ele no formato JSON.
+
+O perfil deve incluir os seguintes campos:
+
+1. **Identificação:**
+   - counselorId: identificador único em lowercase com hífens (ex: "hans-morgenthau")
+   - name: nome completo oficial
+   - shortName: nome curto para exibição (sobrenome principal)
+   - nationality: nacionalidade completa (ex: "Americano (nascido na Alemanha)")
+   - birthYear: ano de nascimento (número)
+   - deathYear: ano de falecimento (número ou null se vivo)
+
+2. **Teoria e Contribuições:**
+   - mainTheory: principal teoria ou contribuição (ex: "Teoria do Realismo Político")
+   - shortBio: biografia curta de 1-2 frases destacando a importância histórica
+   - fullBio: biografia completa em 3-5 parágrafos, cobrindo formação, carreira, contribuições e legado
+   - keyContributions: array de 3-5 contribuições principais para a geopolítica
+   - areasOfExpertise: array de 3-5 áreas de especialização
+
+3. **Obras:**
+   - mainBooks: array de 2-4 livros principais, cada um com:
+     - title: título do livro
+     - year: ano de publicação
+     - description: breve descrição da obra
+
+4. **Personalidade e Estilo (para simulação de IA):**
+   - personalityTraits: array de 3-5 traços de personalidade característicos
+   - writingStyle: descrição detalhada do estilo de escrita (formal, acadêmico, polêmico, etc.)
+   - analysisApproach: como ele tipicamente aborda análises geopolíticas
+   - keyPhrases: array de 2-4 frases ou expressões características que ele usaria
+
+IMPORTANTE:
+- Todas as informações devem ser historicamente precisas
+- A biografia deve ser em português brasileiro
+- Os traços de personalidade devem permitir simular o pensador em debates
+- Responda APENAS com o JSON válido, sem explicações adicionais`,
+      defaultContent: `Você é um especialista em geopolítica e relações internacionais. Dado o nome de um pensador geopolítico, gere um perfil completo para ele no formato JSON.
+
+O perfil deve incluir:
+1. Identificação (counselorId, name, shortName, nationality, birthYear, deathYear)
+2. Teoria e Contribuições (mainTheory, shortBio, fullBio, keyContributions, areasOfExpertise)
+3. Obras (mainBooks com title, year, description)
+4. Personalidade e Estilo (personalityTraits, writingStyle, analysisApproach, keyPhrases)
+
+Responda APENAS com o JSON válido, sem explicações adicionais.`,
+    },
+  ];
+
+  // Inserir prompts com upsert manual (verificar se existe, atualizar ou inserir)
+  for (const prompt of promptsData) {
+    try {
+      const existing = await database.select()
+        .from(schema.systemPrompts)
+        .where(eq(schema.systemPrompts.promptKey, prompt.promptKey))
+        .limit(1);
+
+      if (existing.length > 0) {
+        // Atualizar existente
+        await database.update(schema.systemPrompts)
+          .set({
+            promptName: prompt.promptName,
+            description: prompt.description,
+            category: prompt.category,
+            promptContent: prompt.promptContent,
+            defaultContent: prompt.defaultContent,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.systemPrompts.promptKey, prompt.promptKey));
+      } else {
+        // Inserir novo
+        await database.insert(schema.systemPrompts).values(prompt);
+      }
+      results.prompts.success++;
+      console.log(`   ✓ Prompt '${prompt.promptKey}' importado`);
+    } catch (error) {
+      console.error(`   ❌ Erro ao importar prompt ${prompt.promptKey}:`, error);
+      results.prompts.failed++;
+    }
+  }
+  console.log(`   ✅ ${results.prompts.success} prompts importados (${results.prompts.failed} falhas)`);
+
+  // =====================================================
+  // RESUMO FINAL
+  // =====================================================
   console.log("\n═══════════════════════════════════════════════════════");
-  console.log("✅ IMPORTAÇÃO CONCLUÍDA COM SUCESSO!");
+  console.log("✅ IMPORTAÇÃO CONCLUÍDA!");
   console.log("═══════════════════════════════════════════════════════");
-  console.log("\nDados importados:");
-  console.log("  • 6 usuários convidados");
-  console.log("  • 6 conselheiros geopolíticos");
-  console.log("  • 8 configurações LLM");
-  console.log("  • 4 configurações de temperatura");
-  console.log("  • 7 preços de modelos LLM");
-  console.log("  • Todos os prompts do sistema");
+  console.log("\nResultados:");
+  console.log(`  • Usuários convidados: ${results.invitedUsers.success} OK, ${results.invitedUsers.failed} falhas`);
+  console.log(`  • Conselheiros: ${results.counselors.success} OK, ${results.counselors.failed} falhas`);
+  console.log(`  • Configurações LLM: ${results.llmConfig.success} OK, ${results.llmConfig.failed} falhas`);
+  console.log(`  • Temperaturas: ${results.temperature.success} OK, ${results.temperature.failed} falhas`);
+  console.log(`  • Preços LLM: ${results.llmPricing.success} OK, ${results.llmPricing.failed} falhas`);
+  console.log(`  • Prompts: ${results.prompts.success} OK, ${results.prompts.failed} falhas`);
+
+  return results;
 }
