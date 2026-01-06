@@ -445,9 +445,13 @@ const DEFAULT_COUNSELORS: AgentConfig[] = [
 
 export async function getAllCounselorLlmConfigs() {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) {
+    console.error("[DB] getAllCounselorLlmConfigs: Database not available");
+    return [];
+  }
   // Retornar todos os agentes ordenados por displayOrder e depois por nome
   const result = await db.select().from(counselorLlmConfig).orderBy(counselorLlmConfig.displayOrder, counselorLlmConfig.counselorName);
+  console.log(`[DB] getAllCounselorLlmConfigs: ${result.length} configs encontrados`);
   return result;
 }
 
@@ -486,8 +490,11 @@ export async function getCounselorLlmConfig(counselorId: string) {
 
 export async function upsertCounselorLlmConfig(data: InsertCounselorLlmConfig) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
+  if (!db) {
+    console.error("[DB] upsertCounselorLlmConfig: Database not available");
+    throw new Error("Database not available");
+  }
+
   await db.insert(counselorLlmConfig).values(data).onConflictDoUpdate({
     target: counselorLlmConfig.counselorId,
     set: {
@@ -500,6 +507,7 @@ export async function upsertCounselorLlmConfig(data: InsertCounselorLlmConfig) {
       isActive: data.isActive,
     },
   });
+  console.log(`[DB] LLM Config para ${data.counselorId} salvo: ${data.llmProvider}/${data.llmModel}`);
 }
 
 export async function updateCounselorPersonality(counselorId: string, personality: string | null) {
@@ -532,37 +540,51 @@ export async function reorderCounselorLlmConfigs(items: { counselorId: string; d
 
 export async function initializeDefaultCounselorConfigs() {
   const db = await getDb();
-  if (!db) return;
-  
+  if (!db) {
+    console.error("[DB] initializeDefaultCounselorConfigs: Database not available");
+    return;
+  }
+
+  console.log(`[DB] initializeDefaultCounselorConfigs: Verificando ${DEFAULT_COUNSELORS.length} agentes padrão...`);
+  let created = 0;
+
   // 1. Inicializar coordenadores e tarefas padrão
   for (const counselor of DEFAULT_COUNSELORS) {
-    const existing = await getCounselorLlmConfig(counselor.counselorId);
-    if (!existing) {
-      // Definir LLM padrão baseado na categoria
-      let llmProvider = 'google';
-      let llmModel = 'gemini-2.5-pro';
-      
-      if (counselor.category === 'coordinator') {
-        // Coordenadores (GennovAIs e Max Weber) usam Google Gemini Pro
-        llmProvider = 'google';
-        llmModel = 'gemini-2.5-pro';
-      } else if (counselor.category === 'task') {
-        // Tarefas usam Google Gemini Flash para velocidade
-        llmProvider = 'google';
-        llmModel = 'gemini-2.0-flash-exp';
+    try {
+      const existing = await getCounselorLlmConfig(counselor.counselorId);
+      if (!existing) {
+        // Definir LLM padrão baseado na categoria
+        let llmProvider = 'google';
+        let llmModel = 'gemini-2.5-pro';
+
+        if (counselor.category === 'coordinator') {
+          // Coordenadores (GennovAIs e Max Weber) usam Google Gemini Pro
+          llmProvider = 'google';
+          llmModel = 'gemini-2.5-pro';
+        } else if (counselor.category === 'task') {
+          // Tarefas usam Google Gemini Flash para velocidade
+          llmProvider = 'google';
+          llmModel = 'gemini-2.0-flash-exp';
+        }
+        // Conselheiros usam Google Gemini Pro por padrão
+
+        await upsertCounselorLlmConfig({
+          counselorId: counselor.counselorId,
+          counselorName: counselor.counselorName,
+          llmProvider,
+          llmModel,
+          isActive: true,
+        });
+        console.log(`[DB] LLM Config criado: ${counselor.counselorId} (${counselor.category})`);
+        created++;
       }
-      // Conselheiros usam Google Gemini Pro por padrão
-      
-      await upsertCounselorLlmConfig({
-        counselorId: counselor.counselorId,
-        counselorName: counselor.counselorName,
-        llmProvider,
-        llmModel,
-        isActive: true,
-      });
+    } catch (error) {
+      console.error(`[DB] Erro ao criar LLM config para ${counselor.counselorId}:`, error);
     }
   }
-  
+
+  console.log(`[DB] initializeDefaultCounselorConfigs: ${created} configs criados`);
+
   // 2. Sincronizar automaticamente conselheiros cadastrados na tabela counselors
   await syncCounselorsToLlmConfig();
 }
@@ -1080,9 +1102,14 @@ export async function getTemperatureForAgent(agentType: string): Promise<number>
 
 export async function getSystemPrompts() {
   const db = await getDb();
-  if (!db) return [];
-  
-  return db.select().from(systemPrompts).orderBy(systemPrompts.category, systemPrompts.promptKey);
+  if (!db) {
+    console.error("[DB] getSystemPrompts: Database not available");
+    return [];
+  }
+
+  const result = await db.select().from(systemPrompts).orderBy(systemPrompts.category, systemPrompts.promptKey);
+  console.log(`[DB] getSystemPrompts: ${result.length} prompts encontrados`);
+  return result;
 }
 
 export async function getSystemPrompt(promptKey: string) {
@@ -1095,10 +1122,13 @@ export async function getSystemPrompt(promptKey: string) {
 
 export async function upsertSystemPrompt(prompt: InsertSystemPrompt) {
   const db = await getDb();
-  if (!db) return;
-  
+  if (!db) {
+    console.error("[DB] upsertSystemPrompt: Database not available");
+    throw new Error("Database not available");
+  }
+
   const existing = await getSystemPrompt(prompt.promptKey);
-  
+
   if (existing) {
     await db.update(systemPrompts)
       .set({
@@ -1109,8 +1139,10 @@ export async function upsertSystemPrompt(prompt: InsertSystemPrompt) {
         updatedBy: prompt.updatedBy,
       })
       .where(eq(systemPrompts.promptKey, prompt.promptKey));
+    console.log(`[DB] Prompt ${prompt.promptKey} atualizado`);
   } else {
     await db.insert(systemPrompts).values(prompt);
+    console.log(`[DB] Prompt ${prompt.promptKey} criado`);
   }
 }
 
@@ -1535,13 +1567,24 @@ Formato de resposta (JSON):
 Responda APENAS com o JSON.`,
     },
   ];
-  
+
+  console.log(`[DB] initializeDefaultSystemPrompts: Verificando ${defaults.length} prompts padrão...`);
+  let created = 0;
+
   for (const prompt of defaults) {
-    const existing = await getSystemPrompt(prompt.promptKey);
-    if (!existing) {
-      await db.insert(systemPrompts).values(prompt);
+    try {
+      const existing = await getSystemPrompt(prompt.promptKey);
+      if (!existing) {
+        await db.insert(systemPrompts).values(prompt);
+        console.log(`[DB] Prompt criado: ${prompt.promptKey}`);
+        created++;
+      }
+    } catch (error) {
+      console.error(`[DB] Erro ao criar prompt ${prompt.promptKey}:`, error);
     }
   }
+
+  console.log(`[DB] initializeDefaultSystemPrompts: ${created} prompts criados`);
 }
 
 
