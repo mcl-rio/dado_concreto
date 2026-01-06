@@ -47,28 +47,46 @@ async function startServer() {
     try {
       console.log("[Seed] Iniciando importação de dados...");
       const { seedDatabase } = await import("../seed-runner");
-      await seedDatabase();
+      const results = await seedDatabase();
+
+      const totalSuccess = results.invitedUsers.success + results.counselors.success +
+                          results.llmConfig.success + results.temperature.success +
+                          results.llmPricing.success + results.prompts.success;
+      const totalFailed = results.invitedUsers.failed + results.counselors.failed +
+                         results.llmConfig.failed + results.temperature.failed +
+                         results.llmPricing.failed + results.prompts.failed;
+
       res.send(`
         <html>
         <head><title>Importação Concluída</title></head>
         <body style="font-family: Arial; padding: 40px; background: #1a1a2e; color: #eee;">
           <h1 style="color: #4ade80;">✅ Dados importados com sucesso!</h1>
-          <p>Foram importados:</p>
+          <p>Resultados da importação:</p>
           <ul>
-            <li>6 usuários convidados</li>
-            <li>6 conselheiros geopolíticos</li>
-            <li>8 configurações LLM</li>
-            <li>4 configurações de temperatura</li>
-            <li>5 preços de modelos</li>
-            <li>3 prompts do sistema</li>
+            <li>📧 Usuários convidados: ${results.invitedUsers.success} OK, ${results.invitedUsers.failed} falhas</li>
+            <li>👔 Conselheiros: ${results.counselors.success} OK, ${results.counselors.failed} falhas</li>
+            <li>⚙️ Configurações LLM: ${results.llmConfig.success} OK, ${results.llmConfig.failed} falhas</li>
+            <li>🌡️ Temperaturas: ${results.temperature.success} OK, ${results.temperature.failed} falhas</li>
+            <li>💰 Preços LLM: ${results.llmPricing.success} OK, ${results.llmPricing.failed} falhas</li>
+            <li>📝 Prompts: ${results.prompts.success} OK, ${results.prompts.failed} falhas</li>
           </ul>
+          <p><strong>Total: ${totalSuccess} registros importados, ${totalFailed} falhas</strong></p>
           <p><a href="/" style="color: #60a5fa;">Voltar para o app</a></p>
         </body>
         </html>
       `);
     } catch (error) {
       console.error("[Seed] Erro:", error);
-      res.status(500).send(`Erro ao importar: ${error}`);
+      res.status(500).send(`
+        <html>
+        <head><title>Erro na Importação</title></head>
+        <body style="font-family: Arial; padding: 40px; background: #1a1a2e; color: #eee;">
+          <h1 style="color: #ef4444;">❌ Erro ao importar dados</h1>
+          <pre style="background: #2d2d3d; padding: 20px; overflow-x: auto;">${error}</pre>
+          <p><a href="/" style="color: #60a5fa;">Voltar para o app</a></p>
+        </body>
+        </html>
+      `);
     }
   });
 

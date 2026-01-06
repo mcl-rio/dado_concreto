@@ -38,12 +38,14 @@ async function seedDatabase() {
     ];
 
     for (const user of invitedUsersData) {
+      const emailLower = user.email.toLowerCase();
       await db.insert(schema.invitedUsers)
-        .values(user)
+        .values({ ...user, email: emailLower })
         .onConflictDoUpdate({
           target: schema.invitedUsers.email,
           set: { name: user.name, role: user.role, analysisQuota: user.analysisQuota }
         });
+      console.log(`   ✓ Usuário ${emailLower} importado`);
     }
     console.log(`   ✅ ${invitedUsersData.length} usuários convidados importados\n`);
 
