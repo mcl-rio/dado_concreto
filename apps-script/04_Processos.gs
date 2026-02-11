@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT / FGV v2.0 — Gestão de Processos
+ * WORKFLOW DINT 2.0 — Gestão de Processos
  * ============================================================
  * CRUD de processos de contratação, geração de ID sequencial,
  * criação automática de etapas e cálculo de flags de exigência.

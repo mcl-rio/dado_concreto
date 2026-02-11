@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT / FGV v2.0 — Entry Point e Menu
+ * WORKFLOW DINT 2.0 — Entry Point e Menu
  * ============================================================
  * onOpen, onInstall, menu customizado e funções de
  * lançamento do sidebar.
@@ -13,7 +13,7 @@
  */
 function onOpen(e) {
   var ui = SpreadsheetApp.getUi();
-  ui.createMenu('Workflow DINT v2.0')
+  ui.createMenu('Workflow DINT 2.0')
     .addItem('Abrir Painel Principal', 'showSidebarMain')
     .addSeparator()
     .addSubMenu(ui.createMenu('Processos')
@@ -47,7 +47,7 @@ function onInstall(e) {
 function showSidebarMain() {
   var html = HtmlService.createTemplateFromFile('Sidebar_Main')
     .evaluate()
-    .setTitle('Workflow DINT / FGV v2.0')
+    .setTitle('Workflow DINT 2.0')
     .setWidth(420);
   SpreadsheetApp.getUi().showSidebar(html);
 }

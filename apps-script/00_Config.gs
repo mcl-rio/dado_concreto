@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT / FGV v2.0 — Configuração Central
+ * WORKFLOW DINT 2.0 — Configuração Central
  * ============================================================
  * Constantes, nomes de abas, índices de colunas e enumerações.
  * Nenhuma lógica de negócio — apenas dados de referência.

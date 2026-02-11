@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT / FGV v2.0 — Utilitários
+ * WORKFLOW DINT 2.0 — Utilitários
  * ============================================================
  * Validações, formatação, include() para HTML,
  * helpers de PropertiesService.
