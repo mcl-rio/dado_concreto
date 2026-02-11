@@ -133,11 +133,20 @@ function navigateTo(panelName, params) {
  */
 function loadPanel(serverFunction, initCallback) {
   callServer(serverFunction).then(function(html) {
-    document.getElementById('content-area').innerHTML = html;
+    var contentArea = document.getElementById('content-area');
+    contentArea.innerHTML = html;
+    // innerHTML nao executa <script> — recriar manualmente
+    var scripts = contentArea.querySelectorAll('script');
+    scripts.forEach(function(oldScript) {
+      var newScript = document.createElement('script');
+      newScript.textContent = oldScript.textContent;
+      oldScript.parentNode.replaceChild(newScript, oldScript);
+    });
     if (initCallback) initCallback();
-  }).catch(function() {
+  }).catch(function(err) {
     document.getElementById('content-area').innerHTML =
-      '<div class="card text-center"><p class="text-muted">Erro ao carregar painel.</p></div>';
+      '<div class="card text-center"><p class="text-muted">Erro ao carregar painel: '
+      + (err && err.message ? err.message : 'desconhecido') + '</p></div>';
   });
 }
 
