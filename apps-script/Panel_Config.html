@@ -1,0 +1,119 @@
+<!-- Painel de Configuracao -->
+<div class="card">
+  <div class="card-title">Configuracao do Sistema</div>
+  <p class="text-small text-muted">Workflow DINT / FGV v2.0</p>
+</div>
+
+<div class="card">
+  <div class="card-title">Normativos Implementados</div>
+  <ul id="normativos-list" style="padding-left:16px;font-size:12px;"></ul>
+</div>
+
+<div class="card">
+  <div class="card-title">Triggers Automaticos</div>
+  <p class="text-small text-muted mb-8">
+    Instale os triggers para ativar alertas diarios, relatorios semanais
+    e atualizacao automatica do dashboard.
+  </p>
+  <div class="btn-group">
+    <button class="btn btn-primary btn-sm" onclick="instalarTriggers()">Instalar Triggers</button>
+    <button class="btn btn-danger btn-sm" onclick="removerTriggers()">Remover Triggers</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Acoes do Sistema</div>
+  <div class="btn-group" style="flex-wrap:wrap;">
+    <button class="btn btn-secondary btn-sm" onclick="atualizarDashboardConfig()">Atualizar Dashboard</button>
+    <button class="btn btn-secondary btn-sm" onclick="executarAlertasConfig()">Executar Alertas</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Log de Acoes</div>
+  <div class="form-group">
+    <select id="log-filter-acao" style="padding:6px;font-size:12px;">
+      <option value="">Todas as acoes</option>
+      <option value="CRIAR_PROCESSO">Criar Processo</option>
+      <option value="EDITAR_PROCESSO">Editar Processo</option>
+      <option value="CANCELAR_PROCESSO">Cancelar Processo</option>
+      <option value="CONCLUIR_ETAPA">Concluir Etapa</option>
+      <option value="CRIAR_FORNECEDOR">Criar Fornecedor</option>
+      <option value="ERROR">Erros</option>
+      <option value="LOCK_FAILURE">Falhas de Lock</option>
+    </select>
+  </div>
+  <button class="btn btn-secondary btn-sm mb-8" onclick="consultarLogConfig()">Consultar Log</button>
+  <div id="log-results"></div>
+</div>
+
+<script>
+function initConfigPanel() {
+  // Listar normativos
+  var normativos = ['NP AC.03.004', 'NP AC.03.006', 'NP AC.03.002', 'NP AF.03.003', 'Portaria 24/2024'];
+  var list = document.getElementById('normativos-list');
+  normativos.forEach(function(n) {
+    list.innerHTML += '<li>' + n + '</li>';
+  });
+}
+
+function instalarTriggers() {
+  callServer('installTriggers').then(function() {
+    showToast('Triggers instalados com sucesso.', 'success');
+  });
+}
+
+function removerTriggers() {
+  callServer('removeTriggers').then(function() {
+    showToast('Triggers removidos.', 'success');
+  });
+}
+
+function atualizarDashboardConfig() {
+  callServer('refreshDashboard').then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+  });
+}
+
+function executarAlertasConfig() {
+  callServer('executarAlertasDiarios').then(function() {
+    showToast('Alertas executados.', 'success');
+  });
+}
+
+function consultarLogConfig() {
+  var acao = document.getElementById('log-filter-acao').value;
+  var filters = {};
+  if (acao) filters.acao = acao;
+  filters.limite = 50;
+
+  callServer('consultarLog', filters).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderLog(result.data);
+  });
+}
+
+function renderLog(entries) {
+  var container = document.getElementById('log-results');
+  if (entries.length === 0) {
+    container.innerHTML = '<p class="text-muted text-small">Nenhum registro encontrado.</p>';
+    return;
+  }
+
+  var html = '<table class="data-table"><thead><tr>'
+    + '<th>Data/Hora</th><th>Usuario</th><th>Acao</th><th>Detalhes</th>'
+    + '</tr></thead><tbody>';
+
+  entries.forEach(function(e) {
+    html += '<tr>'
+      + '<td class="text-small">' + e.dataHora + '</td>'
+      + '<td class="text-small">' + e.usuario + '</td>'
+      + '<td class="text-small">' + e.acao + '</td>'
+      + '<td class="text-small">' + (e.detalhes || '').substring(0, 60) + '</td>'
+      + '</tr>';
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+</script>

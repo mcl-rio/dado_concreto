@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Sidebar_CSS') ?>
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <div class="nav-bar">
+    <button class="nav-btn active" data-panel="home" onclick="navigateTo('home')">Home</button>
+    <button class="nav-btn" data-panel="processos" onclick="navigateTo('processos')">Processos</button>
+    <button class="nav-btn" data-panel="fornecedores" onclick="navigateTo('fornecedores')">Fornecedores</button>
+    <button class="nav-btn" data-panel="dashboard" onclick="navigateTo('dashboard')">Dashboard</button>
+    <button class="nav-btn" data-panel="alertas" onclick="navigateTo('alertas')">Alertas</button>
+    <button class="nav-btn" data-panel="config" onclick="navigateTo('config')">Config</button>
+  </div>
+
+  <!-- Content Area (SPA) -->
+  <div id="content-area">
+    <div class="text-center mt-12">
+      <div class="spinner" style="margin: 40px auto;"></div>
+      <p class="text-muted text-small">Carregando...</p>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <?!= include('Sidebar_JS') ?>
+</body>
+</html>

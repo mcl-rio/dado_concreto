@@ -1,0 +1,283 @@
+<script>
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Client-Side JavaScript
+ * ============================================================
+ * Wrapper para google.script.run, navegação SPA,
+ * loading states e toast notifications.
+ * ============================================================
+ */
+
+// ── Server Call Wrapper ─────────────────────────────────────
+
+/**
+ * Chama uma função server-side com Promise semantics.
+ * Exibe loading overlay e trata erros com toast.
+ *
+ * @param {string} functionName - Nome da função no servidor
+ * @param {...*} args - Argumentos para a função
+ * @returns {Promise<*>}
+ */
+function callServer(functionName) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  showLoading();
+
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        resolve(result);
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        var msg = error.message || error || 'Erro inesperado';
+        // Auto-retry para erros de lock
+        if (msg.indexOf('sistema esta ocupado') !== -1) {
+          showToast('Sistema ocupado. Tentando novamente...', 'warning');
+          setTimeout(function() {
+            var retryArgs = [functionName].concat(args);
+            callServerNoRetry.apply(null, retryArgs).then(resolve).catch(reject);
+          }, 3000);
+        } else {
+          showToast(msg, 'error');
+          reject(error);
+        }
+      });
+
+    runner[functionName].apply(runner, args);
+  });
+}
+
+/**
+ * Versão sem auto-retry do callServer.
+ */
+function callServerNoRetry(functionName) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  showLoading();
+
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        resolve(result);
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        showToast(error.message || 'Erro inesperado', 'error');
+        reject(error);
+      });
+
+    runner[functionName].apply(runner, args);
+  });
+}
+
+// ── Navigation ──────────────────────────────────────────────
+
+var currentPanel = 'home';
+
+/**
+ * Navega para um painel específico.
+ * @param {string} panelName
+ * @param {Object} [params] - Parâmetros opcionais para o painel
+ */
+function navigateTo(panelName, params) {
+  currentPanel = panelName;
+
+  // Atualizar botões ativos
+  var btns = document.querySelectorAll('.nav-btn');
+  btns.forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.panel === panelName);
+  });
+
+  var contentArea = document.getElementById('content-area');
+
+  switch (panelName) {
+    case 'home':
+      renderHomePanel();
+      break;
+    case 'processos':
+    case 'processos-consulta':
+      loadPanel('getPanelProcessos', function() { initProcessosPanel('consulta'); });
+      break;
+    case 'processos-novo':
+      loadPanel('getPanelProcessos', function() { initProcessosPanel('novo'); });
+      break;
+    case 'fornecedores':
+    case 'fornecedores-consulta':
+      loadPanel('getPanelFornecedores', function() { initFornecedoresPanel('consulta'); });
+      break;
+    case 'fornecedores-novo':
+      loadPanel('getPanelFornecedores', function() { initFornecedoresPanel('novo'); });
+      break;
+    case 'etapas':
+      loadPanel('getPanelEtapas', function() { initEtapasPanel(params); });
+      break;
+    case 'dashboard':
+      loadPanel('getPanelDashboard', function() { initDashboardPanel(); });
+      break;
+    case 'alertas':
+      loadPanel('getPanelAlertas', function() { initAlertasPanel(); });
+      break;
+    case 'config':
+      loadPanel('getPanelConfig', function() { initConfigPanel(); });
+      break;
+    default:
+      renderHomePanel();
+  }
+}
+
+/**
+ * Carrega HTML de um painel server-side e injeta no content area.
+ * @param {string} serverFunction
+ * @param {Function} [initCallback] - Chamado após injeção
+ */
+function loadPanel(serverFunction, initCallback) {
+  callServer(serverFunction).then(function(html) {
+    document.getElementById('content-area').innerHTML = html;
+    if (initCallback) initCallback();
+  }).catch(function() {
+    document.getElementById('content-area').innerHTML =
+      '<div class="card text-center"><p class="text-muted">Erro ao carregar painel.</p></div>';
+  });
+}
+
+/**
+ * Renderiza o painel Home (ícones de navegação).
+ */
+function renderHomePanel() {
+  var html = '<div class="card">'
+    + '<div class="card-title">Workflow DINT / FGV v2.0</div>'
+    + '<p class="text-small text-muted mb-12">Controle de Contratacoes — Diretoria Internacional</p>'
+    + '</div>'
+    + '<div class="home-grid">'
+    + '<div class="home-card" onclick="navigateTo(\'processos\')"><div class="icon">&#128203;</div><div class="label">Processos</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\'fornecedores\')"><div class="icon">&#127970;</div><div class="label">Fornecedores</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\'dashboard\')"><div class="icon">&#128202;</div><div class="label">Dashboard</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\'alertas\')"><div class="icon">&#128276;</div><div class="label">Alertas</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\'config\')"><div class="icon">&#9881;</div><div class="label">Configuracao</div></div>'
+    + '</div>'
+    + '<p class="text-small text-muted text-center mt-12">v2.0 — Powered by Google Apps Script</p>';
+
+  document.getElementById('content-area').innerHTML = html;
+}
+
+// ── Loading Overlay ─────────────────────────────────────────
+
+function showLoading() {
+  var overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.classList.add('show');
+}
+
+function hideLoading() {
+  var overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+// ── Toast Notifications ─────────────────────────────────────
+
+/**
+ * Exibe uma notificação toast.
+ * @param {string} message
+ * @param {string} type - 'success', 'error', 'warning'
+ * @param {number} [duration=4000] - ms para auto-dismiss
+ */
+function showToast(message, type, duration) {
+  type = type || 'success';
+  duration = duration || 4000;
+
+  var container = document.getElementById('toast-container');
+  if (!container) return;
+
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  setTimeout(function() {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s';
+    setTimeout(function() { toast.remove(); }, 300);
+  }, duration);
+}
+
+// ── Form Helpers ────────────────────────────────────────────
+
+/**
+ * Coleta dados de um formulário por ID.
+ * @param {string} formId
+ * @returns {Object}
+ */
+function collectFormData(formId) {
+  var form = document.getElementById(formId);
+  if (!form) return {};
+
+  var data = {};
+  var inputs = form.querySelectorAll('input, select, textarea');
+  inputs.forEach(function(input) {
+    if (input.name) {
+      data[input.name] = input.value;
+    }
+  });
+  return data;
+}
+
+/**
+ * Preenche um formulário com dados.
+ * @param {string} formId
+ * @param {Object} data
+ */
+function fillFormData(formId, data) {
+  var form = document.getElementById(formId);
+  if (!form || !data) return;
+
+  Object.keys(data).forEach(function(key) {
+    var input = form.querySelector('[name="' + key + '"]');
+    if (input) {
+      input.value = data[key] || '';
+    }
+  });
+}
+
+/**
+ * Reseta um formulário.
+ * @param {string} formId
+ */
+function resetForm(formId) {
+  var form = document.getElementById(formId);
+  if (form) form.reset();
+}
+
+// ── Status Badge Helper ─────────────────────────────────────
+
+/**
+ * Retorna HTML de badge baseado no status.
+ * @param {string} status
+ * @returns {string}
+ */
+function statusBadge(status) {
+  var cls = 'badge-pendente';
+  switch (status) {
+    case 'Em Andamento': cls = 'badge-andamento'; break;
+    case 'Concluido':    cls = 'badge-concluido'; break;
+    case 'Cancelado':    cls = 'badge-cancelado'; break;
+    case 'Suspenso':     cls = 'badge-suspenso';  break;
+    case 'N/A':          cls = 'badge-na';         break;
+  }
+  return '<span class="badge ' + cls + '">' + (status || 'Pendente') + '</span>';
+}
+
+// ── Initialize on Load ──────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Verificar se há painel pré-definido
+  callServer('getInitialPanel').then(function(panel) {
+    if (panel && panel !== 'home') {
+      navigateTo(panel);
+    } else {
+      renderHomePanel();
+    }
+  }).catch(function() {
+    renderHomePanel();
+  });
+});
+</script>
