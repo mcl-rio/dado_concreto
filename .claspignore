@@ -1,0 +1,10 @@
+# Ignorar tudo que não é código Apps Script
+node_modules/**
+scripts/**
+.git/**
+.github/**
+*.md
+package.json
+package-lock.json
+.clasp.json
+.gitignore
