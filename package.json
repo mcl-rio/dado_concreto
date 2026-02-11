@@ -1,13 +1,13 @@
 {
   "name": "dado_concreto",
   "version": "2.0.0",
-  "description": "Workflow DINT/FGV - Sistema de Contratacoes",
+  "description": "Workflow DINT 2.0 - Sistema de Contratacoes",
   "scripts": {
     "setup": "node scripts/setup-clasp.js",
     "deploy": "node scripts/deploy.js",
     "push": "npx clasp push",
     "pull": "npx clasp pull",
-    "open": "npx clasp open",
+    "open": "echo https://script.google.com/d/$(node -e \"console.log(require('./.clasp.json').scriptId)\")/edit",
     "login": "npx clasp login",
     "status": "npx clasp status"
   },

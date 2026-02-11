@@ -22,7 +22,7 @@ var CLASP_JSON = path.join(ROOT, '.clasp.json');
 function main() {
   console.log('');
   console.log('========================================');
-  console.log('  Deploy - Workflow DINT/FGV v2.0');
+  console.log('  Deploy - Workflow DINT 2.0');
   console.log('========================================');
   console.log('');
 
