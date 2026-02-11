@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT 2.0 — Camada de Acesso a Dados (DAL)
+ * WORKFLOW ADM DINT 2.0 — Camada de Acesso a Dados (DAL)
  * ============================================================
  * Abstrai todas as interações com SpreadsheetApp.
  * NENHUM outro arquivo deve chamar getRange(), getValues()

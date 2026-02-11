@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT 2.0 — Registro de Auditoria (Log)
+ * WORKFLOW ADM DINT 2.0 — Registro de Auditoria (Log)
  * ============================================================
  * Grava ações na aba Log com timestamp, usuário, ação e detalhes.
  * logAction() NUNCA lança exceção — falhas são silenciosas.

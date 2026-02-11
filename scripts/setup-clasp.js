@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Setup do clasp para o projeto Workflow DINT/FGV.
+ * Setup do clasp para o projeto Workflow ADM DINT 2.0.
  *
  * Uso:
  *   npm run setup                          # interativo
@@ -24,7 +24,7 @@ var MANIFEST = path.join(APPS_SCRIPT_DIR, 'appsscript.json');
 
 function main() {
   console.log('');
-  console.log('=== Setup Clasp - Workflow DINT/FGV ===');
+  console.log('=== Setup Clasp - Workflow ADM DINT 2.0 ===');
   console.log('');
 
   // 1. Verificar clasp

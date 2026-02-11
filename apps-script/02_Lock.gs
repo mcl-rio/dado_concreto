@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT 2.0 — Controle de Concorrência
+ * WORKFLOW ADM DINT 2.0 — Controle de Concorrência
  * ============================================================
  * Wrapper para LockService.getDocumentLock() com retry
  * e exponential backoff. TODA operação de escrita no sistema

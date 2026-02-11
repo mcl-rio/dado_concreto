@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT 2.0 — Gestão de Etapas
+ * WORKFLOW ADM DINT 2.0 — Gestão de Etapas
  * ============================================================
  * Criação, consulta e avanço das 23 etapas do ciclo de
  * contratação. Avanço automático e cálculo de "Dias em Aberto".

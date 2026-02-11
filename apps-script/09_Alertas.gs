@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT 2.0 — Sistema de Alertas
+ * WORKFLOW ADM DINT 2.0 — Sistema de Alertas
  * ============================================================
  * Avaliação de condições de alerta, envio de emails,
  * gerenciamento de triggers (diário, semanal, dashboard).
@@ -185,7 +185,7 @@ function executarRelatorioSemanal() {
     var kpis = computeKPIs();
     var hoje = new Date();
 
-    var html = '<h2>Workflow DINT 2.0 - Relatorio Semanal</h2>'
+    var html = '<h2>Workflow ADM DINT 2.0 - Relatorio Semanal</h2>'
       + '<p><strong>Data:</strong> ' + formatDateBR(hoje) + '</p>'
       + '<hr>'
       + '<h3>Resumo Geral</h3>'
@@ -212,12 +212,12 @@ function executarRelatorioSemanal() {
       html += '</table>';
     }
 
-    html += '<hr><p style="color:#888;font-size:11px;">Workflow DINT 2.0 - Relatorio automatico</p>';
+    html += '<hr><p style="color:#888;font-size:11px;">Workflow ADM DINT 2.0 - Relatorio automatico</p>';
 
     var recipients = getAlertRecipients_();
     MailApp.sendEmail({
       to: recipients,
-      subject: 'Workflow DINT 2.0 - Relatorio Semanal - ' + formatDateBR(hoje),
+      subject: 'Workflow ADM DINT 2.0 - Relatorio Semanal - ' + formatDateBR(hoje),
       htmlBody: html
     });
 
@@ -332,7 +332,7 @@ function enviarEmailAlertas_(alerts) {
   if (!recipients) return;
 
   var hoje = formatDateBR(new Date());
-  var html = '<h2>Workflow DINT 2.0 - Alertas Diarios</h2>'
+  var html = '<h2>Workflow ADM DINT 2.0 - Alertas Diarios</h2>'
     + '<p><strong>Data:</strong> ' + hoje + '</p>'
     + '<p><strong>' + alerts.length + ' alerta(s) identificado(s)</strong></p>'
     + '<hr>'
@@ -352,11 +352,11 @@ function enviarEmailAlertas_(alerts) {
   }
 
   html += '</table>'
-    + '<hr><p style="color:#888;font-size:11px;">Workflow DINT 2.0 - Alerta automatico</p>';
+    + '<hr><p style="color:#888;font-size:11px;">Workflow ADM DINT 2.0 - Alerta automatico</p>';
 
   MailApp.sendEmail({
     to: recipients,
-    subject: 'Workflow DINT 2.0 - ' + alerts.length + ' Alerta(s) - ' + hoje,
+    subject: 'Workflow ADM DINT 2.0 - ' + alerts.length + ' Alerta(s) - ' + hoje,
     htmlBody: html
   });
 }

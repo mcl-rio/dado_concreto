@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT 2.0 — Gestão de Fornecedores
+ * WORKFLOW ADM DINT 2.0 — Gestão de Fornecedores
  * ============================================================
  * CRUD de fornecedores, validação CNPJ/CPF, tracking de
  * cadastro no Portal de Compras e credenciamento.

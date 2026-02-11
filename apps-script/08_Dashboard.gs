@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT 2.0 — Dashboard
+ * WORKFLOW ADM DINT 2.0 — Dashboard
  * ============================================================
  * Cálculo de KPIs, dados para gráficos e atualização
  * da aba Dashboard.

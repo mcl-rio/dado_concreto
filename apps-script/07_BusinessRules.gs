@@ -1,6 +1,6 @@
 /**
  * ============================================================
- * WORKFLOW DINT 2.0 — Motor de Regras Normativas
+ * WORKFLOW ADM DINT 2.0 — Motor de Regras Normativas
  * ============================================================
  * Calcula quais exigências (flags) se aplicam a um processo
  * com base nos normativos:

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Deploy do Workflow DINT/FGV para Google Apps Script.
+ * Deploy do Workflow ADM DINT 2.0 para Google Apps Script.
  *
  * Uso:
  *   npm run deploy
@@ -22,7 +22,7 @@ var CLASP_JSON = path.join(ROOT, '.clasp.json');
 function main() {
   console.log('');
   console.log('========================================');
-  console.log('  Deploy - Workflow DINT 2.0');
+  console.log('  Deploy - Workflow ADM DINT 2.0');
   console.log('========================================');
   console.log('');
 
