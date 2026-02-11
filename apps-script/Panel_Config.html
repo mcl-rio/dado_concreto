@@ -11,10 +11,7 @@
 
 <div class="card">
   <div class="card-title">Triggers Automaticos</div>
-  <p class="text-small text-muted mb-8">
-    Instale os triggers para ativar alertas diarios, relatorios semanais
-    e atualizacao automatica do dashboard.
-  </p>
+  <p class="text-small text-muted mb-8">Instale os triggers para ativar alertas diarios, relatorios semanais e atualizacao automatica do dashboard.</p>
   <div class="btn-group">
     <button class="btn btn-primary btn-sm" onclick="instalarTriggers()">Instalar Triggers</button>
     <button class="btn btn-danger btn-sm" onclick="removerTriggers()">Remover Triggers</button>
@@ -29,12 +26,15 @@
   </div>
 </div>
 
+<div class="card" style="border:1px solid #e67700;">
+  <div class="card-title" style="color:#e67700;">Remover Todas as Aquisicoes</div>
+  <p class="text-small text-muted mb-8">Remove todas as aquisicoes e suas etapas. Fornecedores e log sao mantidos.</p>
+  <button class="btn btn-sm" style="background:#e67700;color:#fff;" onclick="confirmarApagarAquisicoes()">Remover Todas as Aquisicoes</button>
+</div>
+
 <div class="card" style="border:1px solid #dc3545;">
   <div class="card-title" style="color:#dc3545;">Zona de Perigo</div>
-  <p class="text-small text-muted mb-8">
-    Apaga todos os dados de Processos, Fornecedores, Etapas, Dashboard e Log.
-    Os headers das abas sao mantidos. Esta acao nao pode ser desfeita.
-  </p>
+  <p class="text-small text-muted mb-8">Apaga TODOS os dados: Aquisicoes, Fornecedores, Etapas, Dashboard e Log. Os headers sao mantidos. Nao pode ser desfeita.</p>
   <button class="btn btn-danger btn-sm" onclick="confirmarApagarDados()">Apagar Todos os Dados</button>
 </div>
 
@@ -43,9 +43,10 @@
   <div class="form-group">
     <select id="log-filter-acao" style="padding:6px;font-size:12px;">
       <option value="">Todas as acoes</option>
-      <option value="CRIAR_PROCESSO">Criar Processo</option>
-      <option value="EDITAR_PROCESSO">Editar Processo</option>
-      <option value="CANCELAR_PROCESSO">Cancelar Processo</option>
+      <option value="CRIAR_AQUISICAO">Criar Aquisicao</option>
+      <option value="EDITAR_AQUISICAO">Editar Aquisicao</option>
+      <option value="CANCELAR_AQUISICAO">Cancelar Aquisicao</option>
+      <option value="DELETAR_AQUISICAO">Deletar Aquisicao</option>
       <option value="CONCLUIR_ETAPA">Concluir Etapa</option>
       <option value="CRIAR_FORNECEDOR">Criar Fornecedor</option>
       <option value="ERROR">Erros</option>
@@ -58,48 +59,41 @@
 
 <script>
 function initConfigPanel() {
-  // Listar normativos
   var normativos = ['NP AC.03.004', 'NP AC.03.006', 'NP AC.03.002', 'NP AF.03.003', 'Portaria 24/2024'];
   var list = document.getElementById('normativos-list');
-  normativos.forEach(function(n) {
-    list.innerHTML += '<li>' + n + '</li>';
-  });
+  normativos.forEach(function(n) { list.innerHTML += '<li>' + n + '</li>'; });
 }
 
 function instalarTriggers() {
-  callServer('installTriggers').then(function() {
-    showToast('Triggers instalados com sucesso.', 'success');
-  });
+  callServer('installTriggers').then(function() { showToast('Triggers instalados com sucesso.', 'success'); });
 }
 
 function removerTriggers() {
-  callServer('removeTriggers').then(function() {
-    showToast('Triggers removidos.', 'success');
-  });
+  callServer('removeTriggers').then(function() { showToast('Triggers removidos.', 'success'); });
 }
 
 function atualizarDashboardConfig() {
-  callServer('refreshDashboard').then(function(result) {
+  callServer('refreshDashboard').then(function(result) { showToast(result.message, result.success ? 'success' : 'error'); });
+}
+
+function confirmarApagarAquisicoes() {
+  if (!confirm('ATENCAO: Isso vai remover TODAS as aquisicoes e etapas.\nFornecedores e log serao mantidos.\n\nDeseja continuar?')) return;
+  if (!confirm('TEM CERTEZA? Esta acao nao pode ser desfeita.')) return;
+  callServer('apagarTodasAquisicoes', true).then(function(result) {
     showToast(result.message, result.success ? 'success' : 'error');
   });
 }
 
 function confirmarApagarDados() {
-  if (!confirm('ATENCAO: Isso vai apagar TODOS os dados de Processos, Fornecedores, Etapas, Dashboard e Log.\n\nDeseja continuar?')) {
-    return;
-  }
-  if (!confirm('TEM CERTEZA? Esta acao nao pode ser desfeita.')) {
-    return;
-  }
+  if (!confirm('ATENCAO: Isso vai apagar TODOS os dados de Aquisicoes, Fornecedores, Etapas, Dashboard e Log.\n\nDeseja continuar?')) return;
+  if (!confirm('TEM CERTEZA? Esta acao nao pode ser desfeita.')) return;
   callServer('apagarTodosDados', true).then(function(result) {
     showToast(result.message, result.success ? 'success' : 'error');
   });
 }
 
 function executarAlertasConfig() {
-  callServer('executarAlertasDiarios').then(function() {
-    showToast('Alertas executados.', 'success');
-  });
+  callServer('executarAlertasDiarios').then(function() { showToast('Alertas executados.', 'success'); });
 }
 
 function consultarLogConfig() {
@@ -107,7 +101,6 @@ function consultarLogConfig() {
   var filters = {};
   if (acao) filters.acao = acao;
   filters.limite = 50;
-
   callServer('consultarLog', filters).then(function(result) {
     if (!result.success) { showToast(result.message, 'error'); return; }
     renderLog(result.data);
@@ -116,24 +109,11 @@ function consultarLogConfig() {
 
 function renderLog(entries) {
   var container = document.getElementById('log-results');
-  if (entries.length === 0) {
-    container.innerHTML = '<p class="text-muted text-small">Nenhum registro encontrado.</p>';
-    return;
-  }
-
-  var html = '<table class="data-table"><thead><tr>'
-    + '<th>Data/Hora</th><th>Usuario</th><th>Acao</th><th>Detalhes</th>'
-    + '</tr></thead><tbody>';
-
+  if (entries.length === 0) { container.innerHTML = '<p class="text-muted text-small">Nenhum registro encontrado.</p>'; return; }
+  var html = '<table class="data-table"><thead><tr><th>Data/Hora</th><th>Usuario</th><th>Acao</th><th>Detalhes</th></tr></thead><tbody>';
   entries.forEach(function(e) {
-    html += '<tr>'
-      + '<td class="text-small">' + e.dataHora + '</td>'
-      + '<td class="text-small">' + e.usuario + '</td>'
-      + '<td class="text-small">' + e.acao + '</td>'
-      + '<td class="text-small">' + (e.detalhes || '').substring(0, 60) + '</td>'
-      + '</tr>';
+    html += '<tr><td class="text-small">' + e.dataHora + '</td><td class="text-small">' + e.usuario + '</td><td class="text-small">' + e.acao + '</td><td class="text-small">' + (e.detalhes || '').substring(0, 60) + '</td></tr>';
   });
-
   html += '</tbody></table>';
   container.innerHTML = html;
 }

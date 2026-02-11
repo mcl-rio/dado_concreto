@@ -1,24 +1,21 @@
 /**
  * ============================================================
- * WORKFLOW ADM DINT 2.0 — Configuração Central
- * ============================================================
- * Constantes, nomes de abas, índices de colunas e enumerações.
- * Nenhuma lógica de negócio — apenas dados de referência.
+ * WORKFLOW ADM DINT 2.0 — Configuracao Central
  * ============================================================
  */
 
 // ── Nomes das abas ──────────────────────────────────────────
 var SHEET = {
   HOME:          'HOME',
-  PROCESSOS:     'Processos',
+  AQUISICOES:    'Aquisicoes',
   FORNECEDORES:  'Fornecedores',
   ETAPAS:        'Etapas',
   DASHBOARD:     'Dashboard',
   LOG:           'Log'
 };
 
-// ── Colunas da aba Processos (1-based) ──────────────────────
-var COL_PROC = {
+// ── Colunas da aba Aquisicoes (1-based) ─────────────────────
+var COL_AQUIS = {
   ID:                     1,
   STATUS_GERAL:           2,
   ETAPA_ATUAL:            3,
@@ -63,7 +60,7 @@ var COL_FORN = {
 
 // ── Colunas da aba Etapas (1-based) ─────────────────────────
 var COL_ETAPA = {
-  ID_PROCESSO:     1,
+  ID_AQUISICAO:    1,
   NUM:             2,
   ETAPA:           3,
   RESPONSAVEL:     4,
@@ -83,7 +80,7 @@ var COL_LOG = {
   DETALHES:   4
 };
 
-// ── Status possíveis ────────────────────────────────────────
+// ── Status possiveis ────────────────────────────────────────
 var STATUS = {
   EM_ANDAMENTO:   'Em Andamento',
   CONCLUIDO:      'Concluido',
@@ -93,7 +90,7 @@ var STATUS = {
   NAO_APLICAVEL:  'N/A'
 };
 
-// ── Definição das 23 etapas do ciclo de contratação ─────────
+// ── 23 etapas do ciclo de contratacao ───────────────────────
 var STAGES = [
   { num:  1, name: 'Identificacao da Necessidade',       responsible: 'DINT' },
   { num:  2, name: 'Verificacao Catalogo (INV)',          responsible: 'DINT' },
@@ -120,71 +117,16 @@ var STAGES = [
   { num: 23, name: 'Pagamento Efetuado',                  responsible: 'Contas a Pagar' }
 ];
 
-// ── Mapeamento de flags de exigência para etapas ────────────
 var FLAG_TO_STAGE = {
-  coletaPrecos:    [6],
-  proposta:        [8],
-  credenciamento:  [4],
-  compliance:      [5],
-  contrato:        [9, 10]
+  coletaPrecos: [6], proposta: [8], credenciamento: [4], compliance: [5], contrato: [9, 10]
 };
 
-// ── Tipos e naturezas (enums de formulário) ─────────────────
-var TIPOS_CONTRATACAO = [
-  'Compra Direta',
-  'Licitacao',
-  'Dispensa de Licitacao',
-  'Inexigibilidade'
-];
+var TIPOS_CONTRATACAO = ['Compra Direta', 'Licitacao', 'Dispensa de Licitacao', 'Inexigibilidade'];
+var NATUREZAS_TERCEIRO = ['Pessoa Juridica', 'Pessoa Fisica', 'Organismo Internacional'];
+var NATUREZAS_CONTRATACAO = ['Servico', 'Material', 'Obra', 'Consultoria', 'Locacao'];
+var FORMAS_CONTRATACAO = ['Contrato', 'Ordem de Servico', 'Nota de Empenho', 'Carta Acordo'];
 
-var NATUREZAS_TERCEIRO = [
-  'Pessoa Juridica',
-  'Pessoa Fisica',
-  'Organismo Internacional'
-];
-
-var NATUREZAS_CONTRATACAO = [
-  'Servico',
-  'Material',
-  'Obra',
-  'Consultoria',
-  'Locacao'
-];
-
-var FORMAS_CONTRATACAO = [
-  'Contrato',
-  'Ordem de Servico',
-  'Nota de Empenho',
-  'Carta Acordo'
-];
-
-// ── Configuração de Lock ────────────────────────────────────
-var CONFIG_LOCK = {
-  TIMEOUT_MS:     30000,   // 30s max por tentativa
-  RETRY_COUNT:    3,       // até 3 tentativas
-  RETRY_BASE_MS:  1000     // 1s backoff base
-};
-
-// ── Thresholds de regras normativas (ajustáveis) ────────────
-var THRESHOLDS = {
-  COLETA_PRECOS_VALOR:   17600,    // R$ 17.600
-  PROPOSTA_VALOR:        50000,    // R$ 50.000
-  COMPLIANCE_VALOR:      50000,    // R$ 50.000
-  CONTRATO_VALOR:        100000    // R$ 100.000
-};
-
-// ── Thresholds de alertas ───────────────────────────────────
-var ALERT_DEFAULTS = {
-  OVERDUE_WARNING_DAYS:     3,
-  STALE_DAYS:              15,
-  CREDENTIAL_WARNING_DAYS: 30
-};
-
-// ── Normativos implementados ────────────────────────────────
-var NORMATIVES = [
-  'NP AC.03.004',
-  'NP AC.03.006',
-  'NP AC.03.002',
-  'NP AF.03.003',
-  'Portaria 24/2024'
-];
+var CONFIG_LOCK = { TIMEOUT_MS: 30000, RETRY_COUNT: 3, RETRY_BASE_MS: 1000 };
+var THRESHOLDS = { COLETA_PRECOS_VALOR: 17600, PROPOSTA_VALOR: 50000, COMPLIANCE_VALOR: 50000, CONTRATO_VALOR: 100000 };
+var ALERT_DEFAULTS = { OVERDUE_WARNING_DAYS: 3, STALE_DAYS: 15, CREDENTIAL_WARNING_DAYS: 30 };
+var NORMATIVES = ['NP AC.03.004', 'NP AC.03.006', 'NP AC.03.002', 'NP AF.03.003', 'Portaria 24/2024'];

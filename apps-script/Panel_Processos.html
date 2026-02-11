@@ -1,16 +1,16 @@
-<!-- Painel de Processos -->
-<div id="processos-view-consulta">
+<!-- Painel de Aquisicoes -->
+<div id="aq-view-consulta">
   <div class="card">
-    <div class="card-title">Processos de Contratacao</div>
+    <div class="card-title">Aquisicoes</div>
     <div class="btn-group mb-8">
-      <button class="btn btn-primary btn-sm" onclick="showProcessoForm()">Novo Processo</button>
+      <button class="btn btn-primary btn-sm" onclick="showAquisicaoForm()">Nova Aquisicao</button>
     </div>
     <div class="search-bar">
-      <input type="text" id="proc-search" placeholder="Buscar por ID, descricao ou fornecedor..." onkeyup="if(event.key==='Enter')buscarProcessos()">
-      <button class="btn btn-secondary btn-sm" onclick="buscarProcessos()">Buscar</button>
+      <input type="text" id="aq-search" placeholder="Buscar por ID, descricao ou fornecedor..." onkeyup="if(event.key==='Enter')buscarAquisicoes()">
+      <button class="btn btn-secondary btn-sm" onclick="buscarAquisicoes()">Buscar</button>
     </div>
     <div class="form-group">
-      <select id="proc-filter-status" onchange="buscarProcessos()" style="padding:6px;font-size:12px;">
+      <select id="aq-filter-status" onchange="buscarAquisicoes()" style="padding:6px;font-size:12px;">
         <option value="">Todos os Status</option>
         <option value="Em Andamento">Em Andamento</option>
         <option value="Concluido">Concluido</option>
@@ -19,189 +19,213 @@
       </select>
     </div>
   </div>
-  <div id="proc-results"></div>
+  <div id="aq-results"></div>
 </div>
 
-<div id="processos-view-form" class="hidden">
+<div id="aq-view-form" class="hidden">
   <div class="card">
-    <div class="card-title" id="proc-form-title">Novo Processo</div>
-    <form id="proc-form">
-      <input type="hidden" name="id" id="proc-form-id">
+    <div class="card-title" id="aq-form-title">Nova Aquisicao</div>
+    <form id="aq-form">
+      <input type="hidden" name="id" id="aq-form-id">
       <div class="form-group">
         <label>Descricao *</label>
         <textarea name="descricao" required></textarea>
       </div>
-      <div class="form-group">
-        <label>Tipo de Contratacao *</label>
-        <select name="tipoContratacao" required id="proc-tipo"></select>
-      </div>
-      <div class="form-group">
-        <label>Natureza do Terceiro *</label>
-        <select name="naturezaTerceiro" required id="proc-nat-terceiro"></select>
-      </div>
-      <div class="form-group">
-        <label>Natureza da Contratacao *</label>
-        <select name="naturezaContratacao" required id="proc-nat-contratacao"></select>
-      </div>
-      <div class="form-group">
-        <label>Forma de Contratacao *</label>
-        <select name="formaContratacao" required id="proc-forma"></select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="form-group">
+          <label>Tipo de Contratacao *</label>
+          <select name="tipoContratacao" required id="aq-tipo"></select>
+        </div>
+        <div class="form-group">
+          <label>Natureza do Terceiro *</label>
+          <select name="naturezaTerceiro" required id="aq-nat-terceiro"></select>
+        </div>
+        <div class="form-group">
+          <label>Natureza da Contratacao *</label>
+          <select name="naturezaContratacao" required id="aq-nat-contratacao"></select>
+        </div>
+        <div class="form-group">
+          <label>Forma de Contratacao *</label>
+          <select name="formaContratacao" required id="aq-forma"></select>
+        </div>
       </div>
       <div class="form-group">
         <label>Valor Estimado (R$) *</label>
         <input type="number" name="valorEstimado" step="0.01" min="0.01" required>
       </div>
-      <div class="form-group">
-        <label>Fornecedor</label>
-        <input type="text" name="fornecedor">
+      <div class="card" style="background:#f0f7ff;border-color:#b8d4f0;">
+        <div class="card-title" style="font-size:12px;">Fornecedor (opcional)</div>
+        <div class="form-group">
+          <label>Selecionar fornecedor cadastrado</label>
+          <select id="aq-forn-select" onchange="onFornecedorSelect()">
+            <option value="">— Sem fornecedor —</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="form-group">
+            <label>Fornecedor (nome)</label>
+            <input type="text" name="fornecedor" id="aq-fornecedor-nome">
+          </div>
+          <div class="form-group">
+            <label>CNPJ/CPF</label>
+            <input type="text" name="cnpjCpf" id="aq-fornecedor-doc">
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <label>CNPJ/CPF</label>
-        <input type="text" name="cnpjCpf">
-      </div>
-      <div class="form-group">
-        <label>Centro de Custo</label>
-        <input type="text" name="centroCusto">
-      </div>
-      <div class="form-group">
-        <label>Requisitante</label>
-        <input type="text" name="requisitante">
-      </div>
-      <div class="form-group">
-        <label>Prazo (dias)</label>
-        <input type="number" name="prazoPrevisto" value="30" min="1">
-      </div>
-      <div class="form-group">
-        <label>Estrutura</label>
-        <input type="text" name="estrutura">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="form-group">
+          <label>Centro de Custo</label>
+          <input type="text" name="centroCusto">
+        </div>
+        <div class="form-group">
+          <label>Requisitante</label>
+          <input type="text" name="requisitante">
+        </div>
+        <div class="form-group">
+          <label>Prazo (dias)</label>
+          <input type="number" name="prazoPrevisto" value="30" min="1">
+        </div>
+        <div class="form-group">
+          <label>Estrutura</label>
+          <input type="text" name="estrutura">
+        </div>
       </div>
       <div class="form-group">
         <label>Observacoes</label>
         <textarea name="observacoes"></textarea>
       </div>
       <div class="btn-group">
-        <button type="button" class="btn btn-primary" onclick="salvarProcesso()">Salvar</button>
-        <button type="button" class="btn btn-secondary" onclick="hideProcessoForm()">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="salvarAquisicao()">Salvar</button>
+        <button type="button" class="btn btn-secondary" onclick="hideAquisicaoForm()">Cancelar</button>
       </div>
     </form>
   </div>
 </div>
 
 <script>
-var editingProcessoId = null;
+var editingAquisicaoId = null;
 
-function initProcessosPanel(mode) {
-  // Carregar opções dos dropdowns
+function initAquisicoesPanel(mode) {
   callServer('getFormOptions').then(function(opts) {
-    populateSelect('proc-tipo', opts.tiposContratacao);
-    populateSelect('proc-nat-terceiro', opts.naturezasTerceiro);
-    populateSelect('proc-nat-contratacao', opts.naturezasContratacao);
-    populateSelect('proc-forma', opts.formasContratacao);
+    populateSelect('aq-tipo', opts.tiposContratacao);
+    populateSelect('aq-nat-terceiro', opts.naturezasTerceiro);
+    populateSelect('aq-nat-contratacao', opts.naturezasContratacao);
+    populateSelect('aq-forma', opts.formasContratacao);
   });
+  callServer('getFornecedoresParaSelect').then(function(list) {
+    var sel = document.getElementById('aq-forn-select');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Sem fornecedor —</option>';
+    list.forEach(function(f) {
+      sel.innerHTML += '<option value="' + f.cnpjCpf + '" data-nome="' + f.razaoSocial + '">' + f.razaoSocial + ' (' + f.cnpjCpf + ')</option>';
+    });
+  });
+  if (mode === 'novo') showAquisicaoForm(); else buscarAquisicoes();
+}
 
-  if (mode === 'novo') {
-    showProcessoForm();
-  } else {
-    buscarProcessos();
-  }
+function onFornecedorSelect() {
+  var sel = document.getElementById('aq-forn-select');
+  var opt = sel.options[sel.selectedIndex];
+  document.getElementById('aq-fornecedor-nome').value = opt.dataset.nome || '';
+  document.getElementById('aq-fornecedor-doc').value = sel.value || '';
 }
 
 function populateSelect(id, options) {
   var sel = document.getElementById(id);
   if (!sel) return;
   sel.innerHTML = '<option value="">Selecione...</option>';
-  options.forEach(function(opt) {
-    sel.innerHTML += '<option value="' + opt + '">' + opt + '</option>';
-  });
+  options.forEach(function(opt) { sel.innerHTML += '<option value="' + opt + '">' + opt + '</option>'; });
 }
 
-function buscarProcessos() {
-  var busca = document.getElementById('proc-search').value;
-  var status = document.getElementById('proc-filter-status').value;
+function buscarAquisicoes() {
+  var busca = document.getElementById('aq-search').value;
+  var status = document.getElementById('aq-filter-status').value;
   var filters = {};
   if (busca) filters.busca = busca;
   if (status) filters.status = status;
-
-  callServer('consultarProcessos', filters).then(function(result) {
-    if (!result.success) {
-      showToast(result.message, 'error');
-      return;
-    }
-    renderProcessosList(result.data);
+  callServer('consultarAquisicoes', filters).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderAquisicoesList(result.data);
   });
 }
 
-function renderProcessosList(processos) {
-  var container = document.getElementById('proc-results');
-  if (processos.length === 0) {
-    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhum processo encontrado.</p></div>';
+function renderAquisicoesList(aquisicoes) {
+  var container = document.getElementById('aq-results');
+  if (aquisicoes.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhuma aquisicao encontrada.</p></div>';
     return;
   }
-
   var html = '<table class="data-table"><thead><tr>'
     + '<th>ID</th><th>Status</th><th>Etapa</th><th>Descricao</th><th>Dias</th><th>Acoes</th>'
     + '</tr></thead><tbody>';
-
-  processos.forEach(function(p) {
+  aquisicoes.forEach(function(a) {
     html += '<tr>'
-      + '<td class="clickable" onclick="verProcesso(\'' + p.id + '\')">' + p.id + '</td>'
-      + '<td>' + statusBadge(p.statusGeral) + '</td>'
-      + '<td class="text-small">' + (p.etapaAtual || '-') + '</td>'
-      + '<td class="text-small">' + (p.descricao || '').substring(0, 40) + '</td>'
-      + '<td>' + p.diasAberto + '</td>'
+      + '<td class="clickable" onclick="verAquisicao(\'' + a.id + '\')">' + a.id + '</td>'
+      + '<td>' + statusBadge(a.statusGeral) + '</td>'
+      + '<td class="text-small">' + (a.etapaAtual || '-') + '</td>'
+      + '<td class="text-small">' + (a.descricao || '').substring(0, 40) + '</td>'
+      + '<td>' + a.diasAberto + '</td>'
       + '<td>'
-      + '<button class="btn btn-sm btn-secondary" onclick="editarProc(\'' + p.id + '\')">Editar</button> '
-      + '<button class="btn btn-sm btn-primary" onclick="verEtapas(\'' + p.id + '\')">Etapas</button>'
+      + '<button class="btn btn-sm btn-secondary" onclick="editarAq(\'' + a.id + '\')">Editar</button> '
+      + '<button class="btn btn-sm btn-primary" onclick="verEtapas(\'' + a.id + '\')">Etapas</button> '
+      + '<button class="btn btn-sm btn-danger" onclick="deletarAq(\'' + a.id + '\')">Excluir</button>'
       + '</td></tr>';
   });
-
   html += '</tbody></table>';
   container.innerHTML = html;
 }
 
-function showProcessoForm() {
-  editingProcessoId = null;
-  document.getElementById('proc-form-title').textContent = 'Novo Processo';
-  document.getElementById('proc-form-id').value = '';
-  resetForm('proc-form');
-  document.getElementById('processos-view-consulta').classList.add('hidden');
-  document.getElementById('processos-view-form').classList.remove('hidden');
+function showAquisicaoForm() {
+  editingAquisicaoId = null;
+  document.getElementById('aq-form-title').textContent = 'Nova Aquisicao';
+  document.getElementById('aq-form-id').value = '';
+  resetForm('aq-form');
+  document.getElementById('aq-view-consulta').classList.add('hidden');
+  document.getElementById('aq-view-form').classList.remove('hidden');
 }
 
-function hideProcessoForm() {
-  document.getElementById('processos-view-form').classList.add('hidden');
-  document.getElementById('processos-view-consulta').classList.remove('hidden');
+function hideAquisicaoForm() {
+  document.getElementById('aq-view-form').classList.add('hidden');
+  document.getElementById('aq-view-consulta').classList.remove('hidden');
 }
 
-function salvarProcesso() {
-  var data = collectFormData('proc-form');
-  if (editingProcessoId) {
-    callServer('editarProcesso', editingProcessoId, data).then(function(result) {
+function salvarAquisicao() {
+  var data = collectFormData('aq-form');
+  if (editingAquisicaoId) {
+    callServer('editarAquisicao', editingAquisicaoId, data).then(function(result) {
       showToast(result.message, result.success ? 'success' : 'error');
-      if (result.success) { hideProcessoForm(); buscarProcessos(); }
+      if (result.success) { hideAquisicaoForm(); buscarAquisicoes(); }
     });
   } else {
-    callServer('criarProcesso', data).then(function(result) {
+    callServer('criarAquisicao', data).then(function(result) {
       showToast(result.message, result.success ? 'success' : 'error');
-      if (result.success) { hideProcessoForm(); buscarProcessos(); }
+      if (result.success) { hideAquisicaoForm(); buscarAquisicoes(); }
     });
   }
 }
 
-function editarProc(id) {
-  callServer('getProcessoParaEdicao', id).then(function(result) {
+function editarAq(id) {
+  callServer('getAquisicaoParaEdicao', id).then(function(result) {
     if (!result.success) { showToast(result.message, 'error'); return; }
-    editingProcessoId = id;
-    document.getElementById('proc-form-title').textContent = 'Editar Processo ' + id;
-    document.getElementById('proc-form-id').value = id;
-    fillFormData('proc-form', result.data);
-    document.getElementById('processos-view-consulta').classList.add('hidden');
-    document.getElementById('processos-view-form').classList.remove('hidden');
+    editingAquisicaoId = id;
+    document.getElementById('aq-form-title').textContent = 'Editar Aquisicao ' + id;
+    document.getElementById('aq-form-id').value = id;
+    fillFormData('aq-form', result.data);
+    document.getElementById('aq-view-consulta').classList.add('hidden');
+    document.getElementById('aq-view-form').classList.remove('hidden');
   });
 }
 
-function verProcesso(id) {
-  callServer('consultarProcessoPorId', id).then(function(result) {
+function deletarAq(id) {
+  if (!confirm('Tem certeza que deseja EXCLUIR a aquisicao ' + id + '?\nEsta acao remove a aquisicao e todas as suas etapas permanentemente.')) return;
+  callServer('deletarAquisicao', id).then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+    if (result.success) buscarAquisicoes();
+  });
+}
+
+function verAquisicao(id) {
+  callServer('consultarAquisicaoPorId', id).then(function(result) {
     if (!result.success) { showToast(result.message, 'error'); return; }
     var p = result.data;
     var html = '<div class="card">'
@@ -213,21 +237,20 @@ function verProcesso(id) {
       + '<tr><td><strong>Nat. Contratacao</strong></td><td>' + p.naturezaContratacao + '</td></tr>'
       + '<tr><td><strong>Forma</strong></td><td>' + p.formaContratacao + '</td></tr>'
       + '<tr><td><strong>Valor</strong></td><td>R$ ' + (p.valorEstimado || 0) + '</td></tr>'
-      + '<tr><td><strong>Fornecedor</strong></td><td>' + (p.fornecedor || '-') + '</td></tr>'
+      + '<tr><td><strong>Fornecedor</strong></td><td>' + (p.fornecedor || 'Nenhum') + '</td></tr>'
       + '<tr><td><strong>Abertura</strong></td><td>' + (p.dataAbertura || '-') + '</td></tr>'
       + '<tr><td><strong>Prazo</strong></td><td>' + (p.prazoPrevisto || '-') + '</td></tr>'
       + '<tr><td><strong>Dias Aberto</strong></td><td>' + p.diasAberto + '</td></tr>'
       + '</table>'
       + '<div class="btn-group mt-8">'
       + '<button class="btn btn-primary btn-sm" onclick="verEtapas(\'' + p.id + '\')">Ver Etapas</button>'
-      + '<button class="btn btn-secondary btn-sm" onclick="editarProc(\'' + p.id + '\')">Editar</button>'
-      + '<button class="btn btn-secondary btn-sm" onclick="buscarProcessos();hideProcessoForm()">Voltar</button>'
+      + '<button class="btn btn-secondary btn-sm" onclick="editarAq(\'' + p.id + '\')">Editar</button>'
+      + '<button class="btn btn-danger btn-sm" onclick="deletarAq(\'' + p.id + '\')">Excluir</button>'
+      + '<button class="btn btn-secondary btn-sm" onclick="buscarAquisicoes();hideAquisicaoForm()">Voltar</button>'
       + '</div></div>';
-    document.getElementById('proc-results').innerHTML = html;
+    document.getElementById('aq-results').innerHTML = html;
   });
 }
 
-function verEtapas(id) {
-  navigateTo('etapas', { processoId: id });
-}
+function verEtapas(id) { navigateTo('etapas', { processoId: id }); }
 </script>

@@ -3,14 +3,11 @@
   <div class="card-title">Dashboard</div>
   <button class="btn btn-secondary btn-sm" onclick="atualizarDashboard()">Atualizar Agora</button>
 </div>
-
 <div id="dashboard-kpis"></div>
 <div id="dashboard-tables"></div>
 
 <script>
-function initDashboardPanel() {
-  carregarDashboard();
-}
+function initDashboardPanel() { carregarDashboard(); }
 
 function carregarDashboard() {
   callServer('getDashboardData').then(function(result) {
@@ -20,9 +17,8 @@ function carregarDashboard() {
 }
 
 function renderDashboard(kpis) {
-  // KPIs em cards
   var kpiHtml = '<div class="kpi-grid">'
-    + kpiCard(kpis.totalProcessos, 'Total Processos')
+    + kpiCard(kpis.totalAquisicoes, 'Total Aquisicoes')
     + kpiCard(kpis.emAndamento, 'Em Andamento')
     + kpiCard(kpis.concluidos, 'Concluidos')
     + kpiCard(kpis.cancelados, 'Cancelados')
@@ -31,49 +27,29 @@ function renderDashboard(kpis) {
     + '</div>';
   document.getElementById('dashboard-kpis').innerHTML = kpiHtml;
 
-  // Tabelas
   var tablesHtml = '';
-
-  // Por tipo de contratação
   var tipos = Object.keys(kpis.porTipo || {});
   if (tipos.length > 0) {
-    tablesHtml += '<div class="card"><div class="card-title">Por Tipo de Contratacao</div>'
-      + '<table class="data-table"><thead><tr><th>Tipo</th><th>Qtd</th></tr></thead><tbody>';
-    tipos.forEach(function(t) {
-      tablesHtml += '<tr><td>' + t + '</td><td>' + kpis.porTipo[t] + '</td></tr>';
-    });
+    tablesHtml += '<div class="card"><div class="card-title">Por Tipo de Contratacao</div><table class="data-table"><thead><tr><th>Tipo</th><th>Qtd</th></tr></thead><tbody>';
+    tipos.forEach(function(t) { tablesHtml += '<tr><td>' + t + '</td><td>' + kpis.porTipo[t] + '</td></tr>'; });
     tablesHtml += '</tbody></table></div>';
   }
-
-  // Por etapa atual
   var etapas = Object.keys(kpis.porEtapaAtual || {});
   if (etapas.length > 0) {
-    tablesHtml += '<div class="card"><div class="card-title">Por Etapa Atual (Em Andamento)</div>'
-      + '<table class="data-table"><thead><tr><th>Etapa</th><th>Qtd</th></tr></thead><tbody>';
-    etapas.forEach(function(e) {
-      tablesHtml += '<tr><td class="text-small">' + e + '</td><td>' + kpis.porEtapaAtual[e] + '</td></tr>';
-    });
+    tablesHtml += '<div class="card"><div class="card-title">Por Etapa Atual (Em Andamento)</div><table class="data-table"><thead><tr><th>Etapa</th><th>Qtd</th></tr></thead><tbody>';
+    etapas.forEach(function(e) { tablesHtml += '<tr><td class="text-small">' + e + '</td><td>' + kpis.porEtapaAtual[e] + '</td></tr>'; });
     tablesHtml += '</tbody></table></div>';
   }
-
-  // Volume mensal
   var meses = Object.keys(kpis.volumeMensal || {}).sort();
   if (meses.length > 0) {
-    tablesHtml += '<div class="card"><div class="card-title">Volume Mensal</div>'
-      + '<table class="data-table"><thead><tr><th>Mes/Ano</th><th>Qtd</th></tr></thead><tbody>';
-    meses.forEach(function(m) {
-      tablesHtml += '<tr><td>' + m + '</td><td>' + kpis.volumeMensal[m] + '</td></tr>';
-    });
+    tablesHtml += '<div class="card"><div class="card-title">Volume Mensal</div><table class="data-table"><thead><tr><th>Mes/Ano</th><th>Qtd</th></tr></thead><tbody>';
+    meses.forEach(function(m) { tablesHtml += '<tr><td>' + m + '</td><td>' + kpis.volumeMensal[m] + '</td></tr>'; });
     tablesHtml += '</tbody></table></div>';
   }
-
   document.getElementById('dashboard-tables').innerHTML = tablesHtml;
 }
 
-function kpiCard(value, label) {
-  return '<div class="kpi-card"><div class="kpi-value">' + value + '</div>'
-    + '<div class="kpi-label">' + label + '</div></div>';
-}
+function kpiCard(value, label) { return '<div class="kpi-card"><div class="kpi-value">' + value + '</div><div class="kpi-label">' + label + '</div></div>'; }
 
 function atualizarDashboard() {
   callServer('refreshDashboard').then(function(result) {

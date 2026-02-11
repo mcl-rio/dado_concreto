@@ -2,59 +2,44 @@
  * ============================================================
  * WORKFLOW ADM DINT 2.0 — Entry Point e Menu
  * ============================================================
- * onOpen, onInstall, menu customizado, setup da planilha
- * e funções de lançamento do sidebar.
- * ============================================================
  */
 
-/**
- * Trigger simples — executado quando a planilha é aberta.
- * Cria o menu customizado.
- */
 function onOpen(e) {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('Workflow ADM DINT 2.0')
-    .addItem('Abrir Painel Principal', 'showSidebarMain')
+    .addItem('Abrir Painel Principal', 'showPainelPrincipal')
     .addSeparator()
-    .addSubMenu(ui.createMenu('Processos')
-      .addItem('Novo Processo', 'showSidebarProcessoNovo')
-      .addItem('Consultar Processos', 'showSidebarProcessoConsulta'))
+    .addSubMenu(ui.createMenu('Aquisicoes')
+      .addItem('Nova Aquisicao', 'showPainelAquisicaoNova')
+      .addItem('Consultar Aquisicoes', 'showPainelAquisicaoConsulta'))
     .addSubMenu(ui.createMenu('Fornecedores')
-      .addItem('Novo Fornecedor', 'showSidebarFornecedorNovo')
-      .addItem('Consultar Fornecedores', 'showSidebarFornecedorConsulta'))
+      .addItem('Novo Fornecedor', 'showPainelFornecedorNovo')
+      .addItem('Consultar Fornecedores', 'showPainelFornecedorConsulta'))
     .addSubMenu(ui.createMenu('Dashboard')
       .addItem('Atualizar Dashboard', 'refreshDashboard'))
     .addSubMenu(ui.createMenu('Configuracao')
-      .addItem('Parametros', 'showSidebarConfig')
-      .addItem('Gerenciar Alertas', 'showSidebarAlertas')
+      .addItem('Parametros', 'showPainelConfig')
+      .addItem('Gerenciar Alertas', 'showPainelAlertas')
       .addItem('Instalar Triggers', 'installTriggers')
       .addItem('Remover Triggers', 'removeTriggers'))
     .addToUi();
 }
 
-/**
- * Executado quando o add-on é instalado.
- */
-function onInstall(e) {
-  onOpen(e);
-}
+function onInstall(e) { onOpen(e); }
 
-// ── Setup da Planilha ────────────────────────────────────────
-
-/**
- * Cria todas as abas necessarias com headers.
- * Execute UMA VEZ ao configurar uma planilha nova.
- * Menu: Workflow ADM DINT 2.0 > Configuracao > Instalar Triggers
- * Ou execute manualmente no editor: setupSpreadsheet()
- */
 function setupSpreadsheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   ss.rename('Workflow ADM DINT 2.0');
 
-  // ── Processos ──
-  var shProcessos = getOrCreateSheet_(ss, SHEET.PROCESSOS);
-  shProcessos.clear();
-  shProcessos.getRange(1, 1, 1, 24).setValues([[
+  // Migrar aba antiga Processos para Aquisicoes
+  var shOld = ss.getSheetByName('Processos');
+  if (shOld && !ss.getSheetByName(SHEET.AQUISICOES)) {
+    shOld.setName(SHEET.AQUISICOES);
+  }
+
+  var shAquisicoes = getOrCreateSheet_(ss, SHEET.AQUISICOES);
+  shAquisicoes.clear();
+  shAquisicoes.getRange(1, 1, 1, 24).setValues([[
     'ID', 'Status Geral', 'Etapa Atual', 'Descricao',
     'Tipo Contratacao', 'Natureza Terceiro', 'Natureza Contratacao',
     'Forma Contratacao', 'Valor Estimado', 'Fornecedor', 'CNPJ/CPF',
@@ -62,10 +47,9 @@ function setupSpreadsheet() {
     'Estrutura', 'Coleta Precos', 'Proposta', 'Credenciamento',
     'Compliance', 'Contrato', 'Observacoes', 'Dias Aberto', 'Alertas'
   ]]);
-  shProcessos.setFrozenRows(1);
-  shProcessos.getRange(1, 1, 1, 24).setFontWeight('bold').setBackground('#d9e2f3');
+  shAquisicoes.setFrozenRows(1);
+  shAquisicoes.getRange(1, 1, 1, 24).setFontWeight('bold').setBackground('#d9e2f3');
 
-  // ── Fornecedores ──
   var shFornecedores = getOrCreateSheet_(ss, SHEET.FORNECEDORES);
   shFornecedores.clear();
   shFornecedores.getRange(1, 1, 1, 12).setValues([[
@@ -76,229 +60,133 @@ function setupSpreadsheet() {
   shFornecedores.setFrozenRows(1);
   shFornecedores.getRange(1, 1, 1, 12).setFontWeight('bold').setBackground('#d9e2f3');
 
-  // ── Etapas ──
   var shEtapas = getOrCreateSheet_(ss, SHEET.ETAPAS);
   shEtapas.clear();
   shEtapas.getRange(1, 1, 1, 10).setValues([[
-    'ID Processo', 'Num', 'Etapa', 'Responsavel', 'Status',
+    'ID Aquisicao', 'Num', 'Etapa', 'Responsavel', 'Status',
     'Data Inicio', 'Data Conclusao', 'Prazo Limite',
     'Documento Ref', 'Observacoes'
   ]]);
   shEtapas.setFrozenRows(1);
   shEtapas.getRange(1, 1, 1, 10).setFontWeight('bold').setBackground('#d9e2f3');
 
-  // ── Dashboard ──
   var shDashboard = getOrCreateSheet_(ss, SHEET.DASHBOARD);
   shDashboard.clear();
   shDashboard.getRange(1, 1).setValue('Workflow ADM DINT 2.0 — Dashboard');
   shDashboard.getRange(1, 1).setFontWeight('bold').setFontSize(14);
 
-  // ── Log ──
   var shLog = getOrCreateSheet_(ss, SHEET.LOG);
   shLog.clear();
-  shLog.getRange(1, 1, 1, 4).setValues([[
-    'Data/Hora', 'Usuario', 'Acao', 'Detalhes'
-  ]]);
+  shLog.getRange(1, 1, 1, 4).setValues([['Data/Hora', 'Usuario', 'Acao', 'Detalhes']]);
   shLog.setFrozenRows(1);
   shLog.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#d9e2f3');
 
-  // ── HOME ──
   var shHome = getOrCreateSheet_(ss, SHEET.HOME);
   shHome.clear();
   shHome.getRange(1, 1).setValue('Workflow ADM DINT 2.0');
   shHome.getRange(1, 1).setFontWeight('bold').setFontSize(16);
-  shHome.getRange(2, 1).setValue('Use o menu acima ou o sidebar para navegar.');
+  shHome.getRange(2, 1).setValue('Use o menu acima ou o painel para navegar.');
 
-  // Remover aba padrao "Sheet1" / "Planilha1" se existir
   var defaultSheet = ss.getSheetByName('Sheet1') || ss.getSheetByName('Planilha1');
-  if (defaultSheet && ss.getSheets().length > 1) {
-    ss.deleteSheet(defaultSheet);
-  }
-
-  // Ativar aba HOME
+  if (defaultSheet && ss.getSheets().length > 1) ss.deleteSheet(defaultSheet);
   shHome.activate();
 
   SpreadsheetApp.getUi().alert(
-    'Planilha configurada com sucesso!\n\n'
-    + 'Abas criadas: HOME, Processos, Fornecedores, Etapas, Dashboard, Log\n\n'
-    + 'Recarregue a pagina para ver o menu.'
+    'Planilha configurada com sucesso!\n\nAbas criadas: HOME, Aquisicoes, Fornecedores, Etapas, Dashboard, Log\n\nRecarregue a pagina para ver o menu.'
   );
 }
 
-/**
- * Apaga todos os dados de todas as abas (mantém headers).
- * Chamado pelo sidebar com confirmação do usuário.
- *
- * @param {boolean} confirmado - Deve ser true para executar
- * @returns {{success: boolean, message: string}}
- */
 function apagarTodosDados(confirmado) {
   try {
-    if (!confirmado) {
-      return { success: false, message: 'Operacao nao confirmada.' };
-    }
-
+    if (!confirmado) return { success: false, message: 'Operacao nao confirmada.' };
     return withDocumentLock(function() {
-      var abas = [SHEET.PROCESSOS, SHEET.FORNECEDORES, SHEET.ETAPAS, SHEET.LOG];
-      for (var i = 0; i < abas.length; i++) {
-        DAL.clearData(abas[i]);
-      }
-
-      // Limpar Dashboard (não usa DAL.clearData porque tem layout especial)
+      var abas = [SHEET.AQUISICOES, SHEET.FORNECEDORES, SHEET.ETAPAS, SHEET.LOG];
+      for (var i = 0; i < abas.length; i++) { DAL.clearData(abas[i]); }
       var shDashboard = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.DASHBOARD);
       if (shDashboard) {
         shDashboard.clear();
         shDashboard.getRange(1, 1).setValue('Workflow ADM DINT 2.0 — Dashboard');
         shDashboard.getRange(1, 1).setFontWeight('bold').setFontSize(14);
       }
-
       logAction('APAGAR_DADOS', 'Todos os dados foram apagados pelo usuario');
-
       return { success: true, message: 'Todos os dados foram apagados com sucesso.' };
     }, 'apagarTodosDados');
-  } catch (e) {
-    return { success: false, message: 'Erro ao apagar dados: ' + e.message };
-  }
+  } catch (e) { return { success: false, message: 'Erro ao apagar dados: ' + e.message }; }
 }
 
-/**
- * Retorna uma aba existente ou cria uma nova.
- * @param {Spreadsheet} ss
- * @param {string} name
- * @returns {Sheet}
- */
 function getOrCreateSheet_(ss, name) {
   var sheet = ss.getSheetByName(name);
-  if (!sheet) {
-    sheet = ss.insertSheet(name);
-  }
+  if (!sheet) sheet = ss.insertSheet(name);
   return sheet;
 }
 
-// ── Sidebar Launchers ───────────────────────────────────────
+// ── Painel Principal (Modal Dialog em tela cheia) ────────────
 
-/**
- * Abre o sidebar principal (painel de navegação).
- */
-function showSidebarMain() {
+function showPainelPrincipal() {
   var html = HtmlService.createTemplateFromFile('Sidebar_Main')
     .evaluate()
     .setTitle('Workflow ADM DINT 2.0')
-    .setWidth(420);
-  SpreadsheetApp.getUi().showSidebar(html);
+    .setWidth(960)
+    .setHeight(620);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Workflow ADM DINT 2.0');
 }
 
-/**
- * Abre o sidebar focado em novo processo.
- */
-function showSidebarProcessoNovo() {
-  setUserState('SIDEBAR_PANEL', 'processos-novo');
-  showSidebarMain();
+function showPainelAquisicaoNova() {
+  setUserState('SIDEBAR_PANEL', 'aquisicoes-novo');
+  showPainelPrincipal();
 }
 
-/**
- * Abre o sidebar focado em consulta de processos.
- */
-function showSidebarProcessoConsulta() {
-  setUserState('SIDEBAR_PANEL', 'processos-consulta');
-  showSidebarMain();
+function showPainelAquisicaoConsulta() {
+  setUserState('SIDEBAR_PANEL', 'aquisicoes-consulta');
+  showPainelPrincipal();
 }
 
-/**
- * Abre o sidebar focado em novo fornecedor.
- */
-function showSidebarFornecedorNovo() {
+function showPainelFornecedorNovo() {
   setUserState('SIDEBAR_PANEL', 'fornecedores-novo');
-  showSidebarMain();
+  showPainelPrincipal();
 }
 
-/**
- * Abre o sidebar focado em consulta de fornecedores.
- */
-function showSidebarFornecedorConsulta() {
+function showPainelFornecedorConsulta() {
   setUserState('SIDEBAR_PANEL', 'fornecedores-consulta');
-  showSidebarMain();
+  showPainelPrincipal();
 }
 
-/**
- * Abre o sidebar focado em configuração.
- */
-function showSidebarConfig() {
+function showPainelConfig() {
   setUserState('SIDEBAR_PANEL', 'config');
-  showSidebarMain();
+  showPainelPrincipal();
 }
 
-/**
- * Abre o sidebar focado em alertas.
- */
-function showSidebarAlertas() {
+function showPainelAlertas() {
   setUserState('SIDEBAR_PANEL', 'alertas');
-  showSidebarMain();
+  showPainelPrincipal();
 }
 
-// ── Funções de painel (retornam HTML para o sidebar SPA) ────
-
-/**
- * Retorna o painel inicial do sidebar.
- * @returns {string}
- */
 function getInitialPanel() {
   var panel = getUserState('SIDEBAR_PANEL') || 'home';
-  // Limpar estado após leitura
   setUserState('SIDEBAR_PANEL', '');
   return panel;
 }
 
-/**
- * Retorna HTML do painel de processos.
- * @returns {string}
- */
-function getPanelProcessos() {
-  var template = HtmlService.createTemplateFromFile('Panel_Processos');
-  return template.evaluate().getContent();
+function getPanelAquisicoes() {
+  return HtmlService.createTemplateFromFile('Panel_Processos').evaluate().getContent();
 }
 
-/**
- * Retorna HTML do painel de fornecedores.
- * @returns {string}
- */
 function getPanelFornecedores() {
-  var template = HtmlService.createTemplateFromFile('Panel_Fornecedores');
-  return template.evaluate().getContent();
+  return HtmlService.createTemplateFromFile('Panel_Fornecedores').evaluate().getContent();
 }
 
-/**
- * Retorna HTML do painel de etapas.
- * @returns {string}
- */
 function getPanelEtapas() {
-  var template = HtmlService.createTemplateFromFile('Panel_Etapas');
-  return template.evaluate().getContent();
+  return HtmlService.createTemplateFromFile('Panel_Etapas').evaluate().getContent();
 }
 
-/**
- * Retorna HTML do painel do dashboard.
- * @returns {string}
- */
 function getPanelDashboard() {
-  var template = HtmlService.createTemplateFromFile('Panel_Dashboard');
-  return template.evaluate().getContent();
+  return HtmlService.createTemplateFromFile('Panel_Dashboard').evaluate().getContent();
 }
 
-/**
- * Retorna HTML do painel de alertas.
- * @returns {string}
- */
 function getPanelAlertas() {
-  var template = HtmlService.createTemplateFromFile('Panel_Alertas');
-  return template.evaluate().getContent();
+  return HtmlService.createTemplateFromFile('Panel_Alertas').evaluate().getContent();
 }
 
-/**
- * Retorna HTML do painel de configuração.
- * @returns {string}
- */
 function getPanelConfig() {
-  var template = HtmlService.createTemplateFromFile('Panel_Config');
-  return template.evaluate().getContent();
+  return HtmlService.createTemplateFromFile('Panel_Config').evaluate().getContent();
 }
