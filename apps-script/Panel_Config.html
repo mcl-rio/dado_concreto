@@ -29,6 +29,15 @@
   </div>
 </div>
 
+<div class="card" style="border:1px solid #dc3545;">
+  <div class="card-title" style="color:#dc3545;">Zona de Perigo</div>
+  <p class="text-small text-muted mb-8">
+    Apaga todos os dados de Processos, Fornecedores, Etapas, Dashboard e Log.
+    Os headers das abas sao mantidos. Esta acao nao pode ser desfeita.
+  </p>
+  <button class="btn btn-danger btn-sm" onclick="confirmarApagarDados()">Apagar Todos os Dados</button>
+</div>
+
 <div class="card">
   <div class="card-title">Log de Acoes</div>
   <div class="form-group">
@@ -71,6 +80,18 @@ function removerTriggers() {
 
 function atualizarDashboardConfig() {
   callServer('refreshDashboard').then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+  });
+}
+
+function confirmarApagarDados() {
+  if (!confirm('ATENCAO: Isso vai apagar TODOS os dados de Processos, Fornecedores, Etapas, Dashboard e Log.\n\nDeseja continuar?')) {
+    return;
+  }
+  if (!confirm('TEM CERTEZA? Esta acao nao pode ser desfeita.')) {
+    return;
+  }
+  callServer('apagarTodosDados', true).then(function(result) {
     showToast(result.message, result.success ? 'success' : 'error');
   });
 }

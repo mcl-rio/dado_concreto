@@ -126,6 +126,42 @@ function setupSpreadsheet() {
 }
 
 /**
+ * Apaga todos os dados de todas as abas (mantém headers).
+ * Chamado pelo sidebar com confirmação do usuário.
+ *
+ * @param {boolean} confirmado - Deve ser true para executar
+ * @returns {{success: boolean, message: string}}
+ */
+function apagarTodosDados(confirmado) {
+  try {
+    if (!confirmado) {
+      return { success: false, message: 'Operacao nao confirmada.' };
+    }
+
+    return withDocumentLock(function() {
+      var abas = [SHEET.PROCESSOS, SHEET.FORNECEDORES, SHEET.ETAPAS, SHEET.LOG];
+      for (var i = 0; i < abas.length; i++) {
+        DAL.clearData(abas[i]);
+      }
+
+      // Limpar Dashboard (não usa DAL.clearData porque tem layout especial)
+      var shDashboard = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.DASHBOARD);
+      if (shDashboard) {
+        shDashboard.clear();
+        shDashboard.getRange(1, 1).setValue('Workflow ADM DINT 2.0 — Dashboard');
+        shDashboard.getRange(1, 1).setFontWeight('bold').setFontSize(14);
+      }
+
+      logAction('APAGAR_DADOS', 'Todos os dados foram apagados pelo usuario');
+
+      return { success: true, message: 'Todos os dados foram apagados com sucesso.' };
+    }, 'apagarTodosDados');
+  } catch (e) {
+    return { success: false, message: 'Erro ao apagar dados: ' + e.message };
+  }
+}
+
+/**
  * Retorna uma aba existente ou cria uma nova.
  * @param {Spreadsheet} ss
  * @param {string} name
