@@ -1,25 +1,1672 @@
 /**
- * ============================================================
- * WORKFLOW DINT / FGV v2.0 — ARQUIVO CONSOLIDADO
- * ============================================================
- * INSTRUCOES DE INSTALACAO:
- * 1. Abra a planilha Workflow Dint no Google Sheets
- * 2. Va em Extensoes > Apps Script
- * 3. Delete todos os arquivos existentes
- * 4. Crie um novo arquivo chamado "Code.gs"
- * 5. Cole TODO o conteudo deste arquivo no Code.gs
- * 6. Salve (Ctrl+S)
- * 7. Recarregue a planilha
- * 8. O menu "Workflow DINT v2.0" aparecera
+ * ============================================================================================
+ * WORKFLOW DINT / FGV v2.0 — ARQUIVO CONSOLIDADO (Single-File Deployment)
+ * ============================================================================================
  *
- * IMPORTANTE: Nao e necessario criar arquivos .html separados.
- * Todo o HTML esta embutido como strings neste arquivo.
+ * Este arquivo contem TODO o codigo do sistema Workflow DINT v2.0 em um unico arquivo .gs,
+ * incluindo templates HTML embutidos como strings.
+ *
+ * COMO INSTALAR:
+ * 1. Abra a planilha Google Sheets de destino.
+ * 2. Va em Extensoes > Apps Script.
+ * 3. Apague todo o conteudo existente (Code.gs padrao).
+ * 4. Cole o conteudo inteiro deste arquivo no editor.
+ * 5. Salve (Ctrl+S).
+ * 6. Recarregue a planilha — o menu "Workflow DINT v2.0" aparecera.
+ * 7. Use o menu Configuracao > Instalar Triggers para ativar automacoes.
+ *
+ * PREREQUISITOS:
+ * - A planilha deve conter as abas: HOME, Processos, Fornecedores, Etapas, Dashboard, Log
+ * - Cada aba deve ter os cabecalhos corretos na linha 1.
+ * - Runtime V8 deve estar habilitado (padrao desde 2020).
+ *
+ * ESTRUTURA DESTE ARQUIVO:
+ * - Secao 0: HTML_TEMPLATES — Templates HTML embutidos como strings
+ * - Secao 1: Funcoes auxiliares para templates embutidos (include, createTemplateFromEmbedded_)
+ * - Secao 2: 00_Config — Configuracao central
+ * - Secao 3: 11_Utils — Utilitarios (sem include original, substituido)
+ * - Secao 4: 10_Log — Registro de auditoria
+ * - Secao 5: 02_Lock — Controle de concorrencia
+ * - Secao 6: 03_DataAccess — Camada de acesso a dados (DAL)
+ * - Secao 7: 07_BusinessRules — Motor de regras normativas
+ * - Secao 8: 06_Etapas — Gestao de etapas
+ * - Secao 9: 04_Processos — Gestao de processos
+ * - Secao 10: 05_Fornecedores — Gestao de fornecedores
+ * - Secao 11: 08_Dashboard — Dashboard e KPIs
+ * - Secao 12: 09_Alertas — Sistema de alertas
+ * - Secao 13: 01_Main — Entry point, menu e sidebar launchers (modificado)
+ *
+ * NOTA: Os templates HTML estao embutidos usando template literals (backticks).
+ * O runtime V8 do Google Apps Script suporta template literals nativamente.
+ *
+ * ============================================================================================
+ * Gerado automaticamente — NAO edite as secoes HTML manualmente.
+ * ============================================================================================
+ */
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 0: HTML_TEMPLATES — Templates HTML embutidos                     █
+// ████████████████████████████████████████████████████████████████████████████
+var HTML_TEMPLATES = {
+  'Sidebar_CSS': `<style>
+  /* ── Reset & Base ──────────────────────────────────── */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+    font-size: 13px;
+    color: #202124;
+    background: #fff;
+    line-height: 1.5;
+  }
+
+  /* ── Navigation Bar ────────────────────────────────── */
+  .nav-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px;
+    background: #1a73e8;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .nav-btn {
+    flex: 1;
+    min-width: 70px;
+    padding: 6px 4px;
+    border: none;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.2s;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.3); }
+  .nav-btn.active { background: #fff; color: #1a73e8; }
+
+  /* ── Content Area ──────────────────────────────────── */
+  #content-area { padding: 12px; }
+
+  /* ── Cards & Panels ────────────────────────────────── */
+  .card {
+    background: #f8f9fa;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a73e8;
+    margin-bottom: 8px;
+  }
+
+  /* ── KPI Cards ─────────────────────────────────────── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .kpi-card {
+    background: #e8f0fe;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+  .kpi-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a73e8;
+  }
+  .kpi-label {
+    font-size: 11px;
+    color: #5f6368;
+    margin-top: 2px;
+  }
+
+  /* ── Forms ─────────────────────────────────────────── */
+  .form-group {
+    margin-bottom: 10px;
+  }
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #5f6368;
+    margin-bottom: 3px;
+  }
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 2px rgba(26,115,232,0.1);
+  }
+  .form-group textarea { resize: vertical; min-height: 60px; }
+
+  /* ── Buttons ───────────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .btn-primary {
+    background: #1a73e8;
+    color: #fff;
+  }
+  .btn-primary:hover { background: #1557b0; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .btn-secondary {
+    background: #f1f3f4;
+    color: #3c4043;
+  }
+  .btn-secondary:hover { background: #e8eaed; }
+  .btn-danger {
+    background: #ea4335;
+    color: #fff;
+  }
+  .btn-danger:hover { background: #c5221f; }
+  .btn-success {
+    background: #34a853;
+    color: #fff;
+  }
+  .btn-success:hover { background: #2d8e47; }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+  .btn-block { width: 100%; }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-group {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  /* ── Tables ────────────────────────────────────────── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .data-table th {
+    background: #f1f3f4;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #5f6368;
+    border-bottom: 2px solid #dadce0;
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #f1f3f4;
+  }
+  .data-table tr:hover td { background: #f8f9fa; }
+  .data-table .clickable { cursor: pointer; color: #1a73e8; }
+  .data-table .clickable:hover { text-decoration: underline; }
+
+  /* ── Status Badges ─────────────────────────────────── */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge-andamento { background: #e8f0fe; color: #1a73e8; }
+  .badge-concluido { background: #e6f4ea; color: #137333; }
+  .badge-cancelado { background: #fce8e6; color: #c5221f; }
+  .badge-suspenso  { background: #fef7e0; color: #ea8600; }
+  .badge-pendente  { background: #f1f3f4; color: #5f6368; }
+  .badge-na        { background: #f1f3f4; color: #9aa0a6; }
+
+  /* ── Timeline (Etapas) ─────────────────────────────── */
+  .timeline { list-style: none; padding-left: 0; }
+  .timeline-item {
+    position: relative;
+    padding: 8px 0 8px 24px;
+    border-left: 2px solid #dadce0;
+  }
+  .timeline-item:last-child { border-left: 2px solid transparent; }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 12px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #dadce0;
+  }
+  .timeline-item.active::before { background: #1a73e8; }
+  .timeline-item.done::before   { background: #34a853; }
+  .timeline-item.na::before     { background: #9aa0a6; }
+  .timeline-item .tl-title { font-weight: 500; font-size: 12px; }
+  .timeline-item .tl-meta  { font-size: 11px; color: #5f6368; }
+
+  /* ── Loading Overlay ───────────────────────────────── */
+  #loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,0.7);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+  }
+  #loading-overlay.show { display: flex; }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid #dadce0;
+    border-top-color: #1a73e8;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Toast Notifications ───────────────────────────── */
+  #toast-container {
+    position: fixed;
+    bottom: 12px; left: 12px; right: 12px;
+    z-index: 1000;
+  }
+  .toast {
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-top: 6px;
+    font-size: 12px;
+    animation: slideUp 0.3s ease;
+  }
+  .toast-success { background: #e6f4ea; color: #137333; border: 1px solid #ceead6; }
+  .toast-error   { background: #fce8e6; color: #c5221f; border: 1px solid #f5c6cb; }
+  .toast-warning { background: #fef7e0; color: #ea8600; border: 1px solid #feefc3; }
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+
+  /* ── Alerts Panel ──────────────────────────────────── */
+  .alert-item {
+    padding: 8px;
+    border-left: 3px solid #ea4335;
+    background: #fce8e6;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .alert-item.warning {
+    border-left-color: #ea8600;
+    background: #fef7e0;
+  }
+
+  /* ── Search Bar ────────────────────────────────────── */
+  .search-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .search-bar input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
+  /* ── Home Panel ────────────────────────────────────── */
+  .home-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .home-card {
+    background: #f8f9fa;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    padding: 16px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .home-card:hover {
+    border-color: #1a73e8;
+    box-shadow: 0 2px 8px rgba(26,115,232,0.15);
+  }
+  .home-card .icon { font-size: 24px; margin-bottom: 6px; }
+  .home-card .label { font-size: 12px; font-weight: 500; color: #3c4043; }
+
+  /* ── Utility ───────────────────────────────────────── */
+  .text-center { text-align: center; }
+  .text-muted  { color: #5f6368; }
+  .text-small  { font-size: 11px; }
+  .mt-8  { margin-top: 8px; }
+  .mt-12 { margin-top: 12px; }
+  .mb-8  { margin-bottom: 8px; }
+  .mb-12 { margin-bottom: 12px; }
+  .hidden { display: none; }
+</style>
+`,
+
+  'Sidebar_JS': `<script>
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Client-Side JavaScript
+ * ============================================================
+ * Wrapper para google.script.run, navegação SPA,
+ * loading states e toast notifications.
  * ============================================================
  */
 
-// ╔════════════════════════════════════════════════════════════╗
-// ║  PARTE 1: CODIGO SERVER-SIDE (de all_gs_code.gs)         ║
-// ╚════════════════════════════════════════════════════════════╝
+// ── Server Call Wrapper ─────────────────────────────────────
+
+/**
+ * Chama uma função server-side com Promise semantics.
+ * Exibe loading overlay e trata erros com toast.
+ *
+ * @param {string} functionName - Nome da função no servidor
+ * @param {...*} args - Argumentos para a função
+ * @returns {Promise<*>}
+ */
+function callServer(functionName) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  showLoading();
+
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        resolve(result);
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        var msg = error.message || error || 'Erro inesperado';
+        // Auto-retry para erros de lock
+        if (msg.indexOf('sistema esta ocupado') !== -1) {
+          showToast('Sistema ocupado. Tentando novamente...', 'warning');
+          setTimeout(function() {
+            var retryArgs = [functionName].concat(args);
+            callServerNoRetry.apply(null, retryArgs).then(resolve).catch(reject);
+          }, 3000);
+        } else {
+          showToast(msg, 'error');
+          reject(error);
+        }
+      });
+
+    runner[functionName].apply(runner, args);
+  });
+}
+
+/**
+ * Versão sem auto-retry do callServer.
+ */
+function callServerNoRetry(functionName) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  showLoading();
+
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        resolve(result);
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        showToast(error.message || 'Erro inesperado', 'error');
+        reject(error);
+      });
+
+    runner[functionName].apply(runner, args);
+  });
+}
+
+// ── Navigation ──────────────────────────────────────────────
+
+var currentPanel = 'home';
+
+/**
+ * Navega para um painel específico.
+ * @param {string} panelName
+ * @param {Object} [params] - Parâmetros opcionais para o painel
+ */
+function navigateTo(panelName, params) {
+  currentPanel = panelName;
+
+  // Atualizar botões ativos
+  var btns = document.querySelectorAll('.nav-btn');
+  btns.forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.panel === panelName);
+  });
+
+  var contentArea = document.getElementById('content-area');
+
+  switch (panelName) {
+    case 'home':
+      renderHomePanel();
+      break;
+    case 'processos':
+    case 'processos-consulta':
+      loadPanel('getPanelProcessos', function() { initProcessosPanel('consulta'); });
+      break;
+    case 'processos-novo':
+      loadPanel('getPanelProcessos', function() { initProcessosPanel('novo'); });
+      break;
+    case 'fornecedores':
+    case 'fornecedores-consulta':
+      loadPanel('getPanelFornecedores', function() { initFornecedoresPanel('consulta'); });
+      break;
+    case 'fornecedores-novo':
+      loadPanel('getPanelFornecedores', function() { initFornecedoresPanel('novo'); });
+      break;
+    case 'etapas':
+      loadPanel('getPanelEtapas', function() { initEtapasPanel(params); });
+      break;
+    case 'dashboard':
+      loadPanel('getPanelDashboard', function() { initDashboardPanel(); });
+      break;
+    case 'alertas':
+      loadPanel('getPanelAlertas', function() { initAlertasPanel(); });
+      break;
+    case 'config':
+      loadPanel('getPanelConfig', function() { initConfigPanel(); });
+      break;
+    default:
+      renderHomePanel();
+  }
+}
+
+/**
+ * Carrega HTML de um painel server-side e injeta no content area.
+ * @param {string} serverFunction
+ * @param {Function} [initCallback] - Chamado após injeção
+ */
+function loadPanel(serverFunction, initCallback) {
+  callServer(serverFunction).then(function(html) {
+    document.getElementById('content-area').innerHTML = html;
+    if (initCallback) initCallback();
+  }).catch(function() {
+    document.getElementById('content-area').innerHTML =
+      '<div class="card text-center"><p class="text-muted">Erro ao carregar painel.</p></div>';
+  });
+}
+
+/**
+ * Renderiza o painel Home (ícones de navegação).
+ */
+function renderHomePanel() {
+  var html = '<div class="card">'
+    + '<div class="card-title">Workflow DINT / FGV v2.0</div>'
+    + '<p class="text-small text-muted mb-12">Controle de Contratacoes — Diretoria Internacional</p>'
+    + '</div>'
+    + '<div class="home-grid">'
+    + '<div class="home-card" onclick="navigateTo(\\'processos\\')"><div class="icon">&#128203;</div><div class="label">Processos</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\\'fornecedores\\')"><div class="icon">&#127970;</div><div class="label">Fornecedores</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\\'dashboard\\')"><div class="icon">&#128202;</div><div class="label">Dashboard</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\\'alertas\\')"><div class="icon">&#128276;</div><div class="label">Alertas</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\\'config\\')"><div class="icon">&#9881;</div><div class="label">Configuracao</div></div>'
+    + '</div>'
+    + '<p class="text-small text-muted text-center mt-12">v2.0 — Powered by Google Apps Script</p>';
+
+  document.getElementById('content-area').innerHTML = html;
+}
+
+// ── Loading Overlay ─────────────────────────────────────────
+
+function showLoading() {
+  var overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.classList.add('show');
+}
+
+function hideLoading() {
+  var overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+// ── Toast Notifications ─────────────────────────────────────
+
+/**
+ * Exibe uma notificação toast.
+ * @param {string} message
+ * @param {string} type - 'success', 'error', 'warning'
+ * @param {number} [duration=4000] - ms para auto-dismiss
+ */
+function showToast(message, type, duration) {
+  type = type || 'success';
+  duration = duration || 4000;
+
+  var container = document.getElementById('toast-container');
+  if (!container) return;
+
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  setTimeout(function() {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s';
+    setTimeout(function() { toast.remove(); }, 300);
+  }, duration);
+}
+
+// ── Form Helpers ────────────────────────────────────────────
+
+/**
+ * Coleta dados de um formulário por ID.
+ * @param {string} formId
+ * @returns {Object}
+ */
+function collectFormData(formId) {
+  var form = document.getElementById(formId);
+  if (!form) return {};
+
+  var data = {};
+  var inputs = form.querySelectorAll('input, select, textarea');
+  inputs.forEach(function(input) {
+    if (input.name) {
+      data[input.name] = input.value;
+    }
+  });
+  return data;
+}
+
+/**
+ * Preenche um formulário com dados.
+ * @param {string} formId
+ * @param {Object} data
+ */
+function fillFormData(formId, data) {
+  var form = document.getElementById(formId);
+  if (!form || !data) return;
+
+  Object.keys(data).forEach(function(key) {
+    var input = form.querySelector('[name="' + key + '"]');
+    if (input) {
+      input.value = data[key] || '';
+    }
+  });
+}
+
+/**
+ * Reseta um formulário.
+ * @param {string} formId
+ */
+function resetForm(formId) {
+  var form = document.getElementById(formId);
+  if (form) form.reset();
+}
+
+// ── Status Badge Helper ─────────────────────────────────────
+
+/**
+ * Retorna HTML de badge baseado no status.
+ * @param {string} status
+ * @returns {string}
+ */
+function statusBadge(status) {
+  var cls = 'badge-pendente';
+  switch (status) {
+    case 'Em Andamento': cls = 'badge-andamento'; break;
+    case 'Concluido':    cls = 'badge-concluido'; break;
+    case 'Cancelado':    cls = 'badge-cancelado'; break;
+    case 'Suspenso':     cls = 'badge-suspenso';  break;
+    case 'N/A':          cls = 'badge-na';         break;
+  }
+  return '<span class="badge ' + cls + '">' + (status || 'Pendente') + '</span>';
+}
+
+// ── Initialize on Load ──────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Verificar se há painel pré-definido
+  callServer('getInitialPanel').then(function(panel) {
+    if (panel && panel !== 'home') {
+      navigateTo(panel);
+    } else {
+      renderHomePanel();
+    }
+  }).catch(function() {
+    renderHomePanel();
+  });
+});
+</script>
+`,
+
+  'Sidebar_Main': `<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Sidebar_CSS') ?>
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <div class="nav-bar">
+    <button class="nav-btn active" data-panel="home" onclick="navigateTo('home')">Home</button>
+    <button class="nav-btn" data-panel="processos" onclick="navigateTo('processos')">Processos</button>
+    <button class="nav-btn" data-panel="fornecedores" onclick="navigateTo('fornecedores')">Fornecedores</button>
+    <button class="nav-btn" data-panel="dashboard" onclick="navigateTo('dashboard')">Dashboard</button>
+    <button class="nav-btn" data-panel="alertas" onclick="navigateTo('alertas')">Alertas</button>
+    <button class="nav-btn" data-panel="config" onclick="navigateTo('config')">Config</button>
+  </div>
+
+  <!-- Content Area (SPA) -->
+  <div id="content-area">
+    <div class="text-center mt-12">
+      <div class="spinner" style="margin: 40px auto;"></div>
+      <p class="text-muted text-small">Carregando...</p>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <?!= include('Sidebar_JS') ?>
+</body>
+</html>
+`,
+
+  'Dialog_Confirm': `<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body {
+      font-family: 'Google Sans', Roboto, Arial, sans-serif;
+      font-size: 13px;
+      padding: 16px;
+      color: #202124;
+    }
+    .dialog-message {
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-primary { background: #1a73e8; color: #fff; }
+    .btn-primary:hover { background: #1557b0; }
+    .btn-secondary { background: #f1f3f4; color: #3c4043; }
+    .btn-secondary:hover { background: #e8eaed; }
+    .btn-danger { background: #ea4335; color: #fff; }
+    .btn-danger:hover { background: #c5221f; }
+  </style>
+</head>
+<body>
+  <div class="dialog-message" id="dialog-message"></div>
+  <div class="dialog-actions">
+    <button class="btn btn-secondary" onclick="google.script.host.close()">Cancelar</button>
+    <button class="btn" id="dialog-confirm-btn" onclick="confirmar()">Confirmar</button>
+  </div>
+
+  <script>
+    // Parâmetros passados via template
+    var actionData = <?!= JSON.stringify(actionData || {}) ?>;
+
+    document.getElementById('dialog-message').innerHTML = actionData.message || 'Deseja confirmar esta acao?';
+
+    var confirmBtn = document.getElementById('dialog-confirm-btn');
+    if (actionData.danger) {
+      confirmBtn.className = 'btn btn-danger';
+    } else {
+      confirmBtn.className = 'btn btn-primary';
+    }
+    confirmBtn.textContent = actionData.confirmLabel || 'Confirmar';
+
+    function confirmar() {
+      if (actionData.serverFunction) {
+        google.script.run
+          .withSuccessHandler(function() { google.script.host.close(); })
+          .withFailureHandler(function(e) { alert(e.message); })
+          [actionData.serverFunction].apply(null, actionData.args || []);
+      } else {
+        google.script.host.close();
+      }
+    }
+  </script>
+</body>
+</html>
+`,
+
+  'Panel_Processos': `<!-- Painel de Processos -->
+<div id="processos-view-consulta">
+  <div class="card">
+    <div class="card-title">Processos de Contratacao</div>
+    <div class="btn-group mb-8">
+      <button class="btn btn-primary btn-sm" onclick="showProcessoForm()">Novo Processo</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="proc-search" placeholder="Buscar por ID, descricao ou fornecedor..." onkeyup="if(event.key==='Enter')buscarProcessos()">
+      <button class="btn btn-secondary btn-sm" onclick="buscarProcessos()">Buscar</button>
+    </div>
+    <div class="form-group">
+      <select id="proc-filter-status" onchange="buscarProcessos()" style="padding:6px;font-size:12px;">
+        <option value="">Todos os Status</option>
+        <option value="Em Andamento">Em Andamento</option>
+        <option value="Concluido">Concluido</option>
+        <option value="Cancelado">Cancelado</option>
+        <option value="Suspenso">Suspenso</option>
+      </select>
+    </div>
+  </div>
+  <div id="proc-results"></div>
+</div>
+
+<div id="processos-view-form" class="hidden">
+  <div class="card">
+    <div class="card-title" id="proc-form-title">Novo Processo</div>
+    <form id="proc-form">
+      <input type="hidden" name="id" id="proc-form-id">
+      <div class="form-group">
+        <label>Descricao *</label>
+        <textarea name="descricao" required></textarea>
+      </div>
+      <div class="form-group">
+        <label>Tipo de Contratacao *</label>
+        <select name="tipoContratacao" required id="proc-tipo"></select>
+      </div>
+      <div class="form-group">
+        <label>Natureza do Terceiro *</label>
+        <select name="naturezaTerceiro" required id="proc-nat-terceiro"></select>
+      </div>
+      <div class="form-group">
+        <label>Natureza da Contratacao *</label>
+        <select name="naturezaContratacao" required id="proc-nat-contratacao"></select>
+      </div>
+      <div class="form-group">
+        <label>Forma de Contratacao *</label>
+        <select name="formaContratacao" required id="proc-forma"></select>
+      </div>
+      <div class="form-group">
+        <label>Valor Estimado (R$) *</label>
+        <input type="number" name="valorEstimado" step="0.01" min="0.01" required>
+      </div>
+      <div class="form-group">
+        <label>Fornecedor</label>
+        <input type="text" name="fornecedor">
+      </div>
+      <div class="form-group">
+        <label>CNPJ/CPF</label>
+        <input type="text" name="cnpjCpf">
+      </div>
+      <div class="form-group">
+        <label>Centro de Custo</label>
+        <input type="text" name="centroCusto">
+      </div>
+      <div class="form-group">
+        <label>Requisitante</label>
+        <input type="text" name="requisitante">
+      </div>
+      <div class="form-group">
+        <label>Prazo (dias)</label>
+        <input type="number" name="prazoPrevisto" value="30" min="1">
+      </div>
+      <div class="form-group">
+        <label>Estrutura</label>
+        <input type="text" name="estrutura">
+      </div>
+      <div class="form-group">
+        <label>Observacoes</label>
+        <textarea name="observacoes"></textarea>
+      </div>
+      <div class="btn-group">
+        <button type="button" class="btn btn-primary" onclick="salvarProcesso()">Salvar</button>
+        <button type="button" class="btn btn-secondary" onclick="hideProcessoForm()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+var editingProcessoId = null;
+
+function initProcessosPanel(mode) {
+  // Carregar opções dos dropdowns
+  callServer('getFormOptions').then(function(opts) {
+    populateSelect('proc-tipo', opts.tiposContratacao);
+    populateSelect('proc-nat-terceiro', opts.naturezasTerceiro);
+    populateSelect('proc-nat-contratacao', opts.naturezasContratacao);
+    populateSelect('proc-forma', opts.formasContratacao);
+  });
+
+  if (mode === 'novo') {
+    showProcessoForm();
+  } else {
+    buscarProcessos();
+  }
+}
+
+function populateSelect(id, options) {
+  var sel = document.getElementById(id);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Selecione...</option>';
+  options.forEach(function(opt) {
+    sel.innerHTML += '<option value="' + opt + '">' + opt + '</option>';
+  });
+}
+
+function buscarProcessos() {
+  var busca = document.getElementById('proc-search').value;
+  var status = document.getElementById('proc-filter-status').value;
+  var filters = {};
+  if (busca) filters.busca = busca;
+  if (status) filters.status = status;
+
+  callServer('consultarProcessos', filters).then(function(result) {
+    if (!result.success) {
+      showToast(result.message, 'error');
+      return;
+    }
+    renderProcessosList(result.data);
+  });
+}
+
+function renderProcessosList(processos) {
+  var container = document.getElementById('proc-results');
+  if (processos.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhum processo encontrado.</p></div>';
+    return;
+  }
+
+  var html = '<table class="data-table"><thead><tr>'
+    + '<th>ID</th><th>Status</th><th>Etapa</th><th>Descricao</th><th>Dias</th><th>Acoes</th>'
+    + '</tr></thead><tbody>';
+
+  processos.forEach(function(p) {
+    html += '<tr>'
+      + '<td class="clickable" onclick="verProcesso(\\'' + p.id + '\\')">' + p.id + '</td>'
+      + '<td>' + statusBadge(p.statusGeral) + '</td>'
+      + '<td class="text-small">' + (p.etapaAtual || '-') + '</td>'
+      + '<td class="text-small">' + (p.descricao || '').substring(0, 40) + '</td>'
+      + '<td>' + p.diasAberto + '</td>'
+      + '<td>'
+      + '<button class="btn btn-sm btn-secondary" onclick="editarProc(\\'' + p.id + '\\')">Editar</button> '
+      + '<button class="btn btn-sm btn-primary" onclick="verEtapas(\\'' + p.id + '\\')">Etapas</button>'
+      + '</td></tr>';
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function showProcessoForm() {
+  editingProcessoId = null;
+  document.getElementById('proc-form-title').textContent = 'Novo Processo';
+  document.getElementById('proc-form-id').value = '';
+  resetForm('proc-form');
+  document.getElementById('processos-view-consulta').classList.add('hidden');
+  document.getElementById('processos-view-form').classList.remove('hidden');
+}
+
+function hideProcessoForm() {
+  document.getElementById('processos-view-form').classList.add('hidden');
+  document.getElementById('processos-view-consulta').classList.remove('hidden');
+}
+
+function salvarProcesso() {
+  var data = collectFormData('proc-form');
+  if (editingProcessoId) {
+    callServer('editarProcesso', editingProcessoId, data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideProcessoForm(); buscarProcessos(); }
+    });
+  } else {
+    callServer('criarProcesso', data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideProcessoForm(); buscarProcessos(); }
+    });
+  }
+}
+
+function editarProc(id) {
+  callServer('getProcessoParaEdicao', id).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    editingProcessoId = id;
+    document.getElementById('proc-form-title').textContent = 'Editar Processo ' + id;
+    document.getElementById('proc-form-id').value = id;
+    fillFormData('proc-form', result.data);
+    document.getElementById('processos-view-consulta').classList.add('hidden');
+    document.getElementById('processos-view-form').classList.remove('hidden');
+  });
+}
+
+function verProcesso(id) {
+  callServer('consultarProcessoPorId', id).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    var p = result.data;
+    var html = '<div class="card">'
+      + '<div class="card-title">' + p.id + ' - ' + p.descricao + '</div>'
+      + '<p>' + statusBadge(p.statusGeral) + ' | Etapa: ' + (p.etapaAtual || '-') + '</p>'
+      + '<table class="data-table mt-8">'
+      + '<tr><td><strong>Tipo</strong></td><td>' + p.tipoContratacao + '</td></tr>'
+      + '<tr><td><strong>Nat. Terceiro</strong></td><td>' + p.naturezaTerceiro + '</td></tr>'
+      + '<tr><td><strong>Nat. Contratacao</strong></td><td>' + p.naturezaContratacao + '</td></tr>'
+      + '<tr><td><strong>Forma</strong></td><td>' + p.formaContratacao + '</td></tr>'
+      + '<tr><td><strong>Valor</strong></td><td>R$ ' + (p.valorEstimado || 0) + '</td></tr>'
+      + '<tr><td><strong>Fornecedor</strong></td><td>' + (p.fornecedor || '-') + '</td></tr>'
+      + '<tr><td><strong>Abertura</strong></td><td>' + (p.dataAbertura || '-') + '</td></tr>'
+      + '<tr><td><strong>Prazo</strong></td><td>' + (p.prazoPrevisto || '-') + '</td></tr>'
+      + '<tr><td><strong>Dias Aberto</strong></td><td>' + p.diasAberto + '</td></tr>'
+      + '</table>'
+      + '<div class="btn-group mt-8">'
+      + '<button class="btn btn-primary btn-sm" onclick="verEtapas(\\'' + p.id + '\\')">Ver Etapas</button>'
+      + '<button class="btn btn-secondary btn-sm" onclick="editarProc(\\'' + p.id + '\\')">Editar</button>'
+      + '<button class="btn btn-secondary btn-sm" onclick="buscarProcessos();hideProcessoForm()">Voltar</button>'
+      + '</div></div>';
+    document.getElementById('proc-results').innerHTML = html;
+  });
+}
+
+function verEtapas(id) {
+  navigateTo('etapas', { processoId: id });
+}
+</script>
+`,
+
+  'Panel_Fornecedores': `<!-- Painel de Fornecedores -->
+<div id="forn-view-consulta">
+  <div class="card">
+    <div class="card-title">Fornecedores</div>
+    <div class="btn-group mb-8">
+      <button class="btn btn-primary btn-sm" onclick="showFornecedorForm()">Novo Fornecedor</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="forn-search" placeholder="Buscar por razao social ou CNPJ/CPF..." onkeyup="if(event.key==='Enter')buscarFornecedores()">
+      <button class="btn btn-secondary btn-sm" onclick="buscarFornecedores()">Buscar</button>
+    </div>
+  </div>
+  <div id="forn-results"></div>
+</div>
+
+<div id="forn-view-form" class="hidden">
+  <div class="card">
+    <div class="card-title" id="forn-form-title">Novo Fornecedor</div>
+    <form id="forn-form">
+      <input type="hidden" name="originalCnpjCpf" id="forn-original-doc">
+      <div class="form-group">
+        <label>CNPJ/CPF *</label>
+        <input type="text" name="cnpjCpf" required id="forn-doc">
+      </div>
+      <div class="form-group">
+        <label>Razao Social *</label>
+        <input type="text" name="razaoSocial" required>
+      </div>
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select name="tipo" required>
+          <option value="">Selecione...</option>
+          <option value="Pessoa Juridica">Pessoa Juridica</option>
+          <option value="Pessoa Fisica">Pessoa Fisica</option>
+          <option value="Organismo Internacional">Organismo Internacional</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Contato</label>
+        <input type="text" name="contato">
+      </div>
+      <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" name="email">
+      </div>
+      <div class="form-group">
+        <label>Telefone</label>
+        <input type="text" name="telefone">
+      </div>
+      <div class="form-group">
+        <label>Dados Bancarios</label>
+        <textarea name="dadosBancarios"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Observacoes</label>
+        <textarea name="observacoes"></textarea>
+      </div>
+      <div class="btn-group">
+        <button type="button" class="btn btn-primary" onclick="salvarFornecedor()">Salvar</button>
+        <button type="button" class="btn btn-secondary" onclick="hideFornecedorForm()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+var editingFornecedor = null;
+
+function initFornecedoresPanel(mode) {
+  if (mode === 'novo') {
+    showFornecedorForm();
+  } else {
+    buscarFornecedores();
+  }
+}
+
+function buscarFornecedores() {
+  var busca = document.getElementById('forn-search').value;
+  var filters = {};
+  if (busca) filters.busca = busca;
+
+  callServer('consultarFornecedores', filters).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderFornecedoresList(result.data);
+  });
+}
+
+function renderFornecedoresList(fornecedores) {
+  var container = document.getElementById('forn-results');
+  if (fornecedores.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhum fornecedor encontrado.</p></div>';
+    return;
+  }
+
+  var html = '<table class="data-table"><thead><tr>'
+    + '<th>CNPJ/CPF</th><th>Razao Social</th><th>Tipo</th><th>Cadastro</th><th>Credenciamento</th><th>Acoes</th>'
+    + '</tr></thead><tbody>';
+
+  fornecedores.forEach(function(f) {
+    html += '<tr>'
+      + '<td class="text-small">' + f.cnpjCpf + '</td>'
+      + '<td>' + f.razaoSocial + '</td>'
+      + '<td class="text-small">' + (f.tipo || '-') + '</td>'
+      + '<td>' + statusBadge(f.statusCadastro || 'Pendente') + '</td>'
+      + '<td>' + statusBadge(f.statusCredenciamento || 'Pendente') + '</td>'
+      + '<td><button class="btn btn-sm btn-secondary" onclick="editarForn(\\'' + f.cnpjCpf + '\\')">Editar</button></td>'
+      + '</tr>';
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function showFornecedorForm() {
+  editingFornecedor = null;
+  document.getElementById('forn-form-title').textContent = 'Novo Fornecedor';
+  document.getElementById('forn-original-doc').value = '';
+  document.getElementById('forn-doc').disabled = false;
+  resetForm('forn-form');
+  document.getElementById('forn-view-consulta').classList.add('hidden');
+  document.getElementById('forn-view-form').classList.remove('hidden');
+}
+
+function hideFornecedorForm() {
+  document.getElementById('forn-view-form').classList.add('hidden');
+  document.getElementById('forn-view-consulta').classList.remove('hidden');
+}
+
+function salvarFornecedor() {
+  var data = collectFormData('forn-form');
+  if (editingFornecedor) {
+    callServer('editarFornecedor', editingFornecedor, data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideFornecedorForm(); buscarFornecedores(); }
+    });
+  } else {
+    callServer('criarFornecedor', data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideFornecedorForm(); buscarFornecedores(); }
+    });
+  }
+}
+
+function editarForn(cnpjCpf) {
+  callServer('consultarFornecedorPorCnpj', cnpjCpf).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    editingFornecedor = cnpjCpf;
+    document.getElementById('forn-form-title').textContent = 'Editar Fornecedor';
+    document.getElementById('forn-original-doc').value = cnpjCpf;
+    document.getElementById('forn-doc').disabled = true;
+    fillFormData('forn-form', result.data);
+    document.getElementById('forn-view-consulta').classList.add('hidden');
+    document.getElementById('forn-view-form').classList.remove('hidden');
+  });
+}
+</script>
+`,
+
+  'Panel_Etapas': `<!-- Painel de Etapas (Timeline) -->
+<div class="card">
+  <div class="card-title" id="etapas-title">Etapas do Processo</div>
+  <p class="text-small text-muted" id="etapas-subtitle"></p>
+</div>
+<div id="etapas-timeline"></div>
+<div class="btn-group mt-8">
+  <button class="btn btn-secondary btn-sm" onclick="navigateTo('processos')">Voltar para Processos</button>
+</div>
+
+<script>
+var currentProcessoId = null;
+
+function initEtapasPanel(params) {
+  if (params && params.processoId) {
+    currentProcessoId = params.processoId;
+    document.getElementById('etapas-title').textContent = 'Etapas — ' + params.processoId;
+    carregarEtapas(params.processoId);
+  } else {
+    document.getElementById('etapas-timeline').innerHTML =
+      '<div class="card text-center"><p class="text-muted">Selecione um processo para ver as etapas.</p></div>';
+  }
+}
+
+function carregarEtapas(processoId) {
+  callServer('consultarEtapas', processoId).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderTimeline(result.data);
+  });
+}
+
+function renderTimeline(etapas) {
+  var container = document.getElementById('etapas-timeline');
+
+  if (etapas.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhuma etapa encontrada.</p></div>';
+    return;
+  }
+
+  var html = '<ul class="timeline">';
+
+  etapas.forEach(function(e) {
+    var itemClass = '';
+    if (e.status === 'Em Andamento') itemClass = 'active';
+    else if (e.status === 'Concluido') itemClass = 'done';
+    else if (e.status === 'N/A') itemClass = 'na';
+
+    var dataInfo = '';
+    if (e.dataInicio) {
+      var dt = e.dataInicio instanceof Date ? e.dataInicio : new Date(e.dataInicio);
+      dataInfo += 'Inicio: ' + (dt.toLocaleDateString ? dt.toLocaleDateString('pt-BR') : e.dataInicio);
+    }
+    if (e.dataConclusao) {
+      var dc = e.dataConclusao instanceof Date ? e.dataConclusao : new Date(e.dataConclusao);
+      dataInfo += ' | Conclusao: ' + (dc.toLocaleDateString ? dc.toLocaleDateString('pt-BR') : e.dataConclusao);
+    }
+    if (e.prazoLimite) {
+      var pl = e.prazoLimite instanceof Date ? e.prazoLimite : new Date(e.prazoLimite);
+      dataInfo += ' | Prazo: ' + (pl.toLocaleDateString ? pl.toLocaleDateString('pt-BR') : e.prazoLimite);
+    }
+
+    html += '<li class="timeline-item ' + itemClass + '">'
+      + '<div class="tl-title">' + e.num + '. ' + e.etapa + '</div>'
+      + '<div class="tl-meta">'
+      + statusBadge(e.status) + ' | Resp: ' + e.responsavel
+      + '</div>';
+
+    if (dataInfo) {
+      html += '<div class="tl-meta">' + dataInfo + '</div>';
+    }
+
+    if (e.documentoRef) {
+      html += '<div class="tl-meta">Doc: ' + e.documentoRef + '</div>';
+    }
+
+    if (e.observacoes) {
+      html += '<div class="tl-meta">Obs: ' + e.observacoes + '</div>';
+    }
+
+    // Botão de concluir etapa (apenas para etapas Em Andamento)
+    if (e.status === 'Em Andamento') {
+      html += '<div class="mt-8">'
+        + '<button class="btn btn-success btn-sm" onclick="concluirEtapaUI(' + e.num + ')">Concluir Etapa</button> '
+        + '<button class="btn btn-secondary btn-sm" onclick="editarEtapaUI(' + e.num + ')">Editar</button>'
+        + '</div>';
+    }
+
+    html += '</li>';
+  });
+
+  html += '</ul>';
+  container.innerHTML = html;
+}
+
+function concluirEtapaUI(etapaNum) {
+  if (!currentProcessoId) return;
+
+  callServer('concluirEtapa', currentProcessoId, etapaNum).then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+    if (result.success) {
+      carregarEtapas(currentProcessoId);
+    }
+  });
+}
+
+function editarEtapaUI(etapaNum) {
+  if (!currentProcessoId) return;
+
+  var prazo = prompt('Prazo Limite (dd/mm/aaaa):');
+  var docRef = prompt('Documento Referencia:');
+  var obs = prompt('Observacoes:');
+
+  var updates = {};
+  if (prazo) {
+    var parts = prazo.split('/');
+    if (parts.length === 3) {
+      updates.prazoLimite = new Date(parts[2], parts[1] - 1, parts[0]);
+    }
+  }
+  if (docRef) updates.documentoRef = docRef;
+  if (obs) updates.observacoes = obs;
+
+  if (Object.keys(updates).length === 0) {
+    showToast('Nenhuma alteracao informada.', 'warning');
+    return;
+  }
+
+  callServer('atualizarEtapa', currentProcessoId, etapaNum, updates).then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+    if (result.success) {
+      carregarEtapas(currentProcessoId);
+    }
+  });
+}
+</script>
+`,
+
+  'Panel_Dashboard': `<!-- Painel do Dashboard -->
+<div class="card">
+  <div class="card-title">Dashboard</div>
+  <button class="btn btn-secondary btn-sm" onclick="atualizarDashboard()">Atualizar Agora</button>
+</div>
+
+<div id="dashboard-kpis"></div>
+<div id="dashboard-tables"></div>
+
+<script>
+function initDashboardPanel() {
+  carregarDashboard();
+}
+
+function carregarDashboard() {
+  callServer('getDashboardData').then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderDashboard(result.data);
+  });
+}
+
+function renderDashboard(kpis) {
+  // KPIs em cards
+  var kpiHtml = '<div class="kpi-grid">'
+    + kpiCard(kpis.totalProcessos, 'Total Processos')
+    + kpiCard(kpis.emAndamento, 'Em Andamento')
+    + kpiCard(kpis.concluidos, 'Concluidos')
+    + kpiCard(kpis.cancelados, 'Cancelados')
+    + kpiCard(kpis.suspensos, 'Suspensos')
+    + kpiCard(kpis.mediadiasAberto, 'Media Dias Aberto')
+    + '</div>';
+  document.getElementById('dashboard-kpis').innerHTML = kpiHtml;
+
+  // Tabelas
+  var tablesHtml = '';
+
+  // Por tipo de contratação
+  var tipos = Object.keys(kpis.porTipo || {});
+  if (tipos.length > 0) {
+    tablesHtml += '<div class="card"><div class="card-title">Por Tipo de Contratacao</div>'
+      + '<table class="data-table"><thead><tr><th>Tipo</th><th>Qtd</th></tr></thead><tbody>';
+    tipos.forEach(function(t) {
+      tablesHtml += '<tr><td>' + t + '</td><td>' + kpis.porTipo[t] + '</td></tr>';
+    });
+    tablesHtml += '</tbody></table></div>';
+  }
+
+  // Por etapa atual
+  var etapas = Object.keys(kpis.porEtapaAtual || {});
+  if (etapas.length > 0) {
+    tablesHtml += '<div class="card"><div class="card-title">Por Etapa Atual (Em Andamento)</div>'
+      + '<table class="data-table"><thead><tr><th>Etapa</th><th>Qtd</th></tr></thead><tbody>';
+    etapas.forEach(function(e) {
+      tablesHtml += '<tr><td class="text-small">' + e + '</td><td>' + kpis.porEtapaAtual[e] + '</td></tr>';
+    });
+    tablesHtml += '</tbody></table></div>';
+  }
+
+  // Volume mensal
+  var meses = Object.keys(kpis.volumeMensal || {}).sort();
+  if (meses.length > 0) {
+    tablesHtml += '<div class="card"><div class="card-title">Volume Mensal</div>'
+      + '<table class="data-table"><thead><tr><th>Mes/Ano</th><th>Qtd</th></tr></thead><tbody>';
+    meses.forEach(function(m) {
+      tablesHtml += '<tr><td>' + m + '</td><td>' + kpis.volumeMensal[m] + '</td></tr>';
+    });
+    tablesHtml += '</tbody></table></div>';
+  }
+
+  document.getElementById('dashboard-tables').innerHTML = tablesHtml;
+}
+
+function kpiCard(value, label) {
+  return '<div class="kpi-card"><div class="kpi-value">' + value + '</div>'
+    + '<div class="kpi-label">' + label + '</div></div>';
+}
+
+function atualizarDashboard() {
+  callServer('refreshDashboard').then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+    if (result.success) carregarDashboard();
+  });
+}
+</script>
+`,
+
+  'Panel_Alertas': `<!-- Painel de Alertas -->
+<div class="card">
+  <div class="card-title">Alertas Ativos</div>
+  <button class="btn btn-secondary btn-sm" onclick="carregarAlertas()">Atualizar</button>
+</div>
+<div id="alertas-list"></div>
+
+<div class="card mt-12">
+  <div class="card-title">Configuracao de Alertas</div>
+  <form id="alertas-config-form">
+    <div class="form-group">
+      <label>Destinatarios (emails separados por virgula)</label>
+      <textarea name="recipients" id="alert-recipients" rows="2"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Dias antes do vencimento para alertar</label>
+      <input type="number" name="overdueWarningDays" id="alert-warning-days" min="1" value="3">
+    </div>
+    <div class="form-group">
+      <label>Dias sem movimentacao (processo parado)</label>
+      <input type="number" name="staleDays" id="alert-stale-days" min="1" value="15">
+    </div>
+    <div class="form-group">
+      <label>Dias antes do vencimento de credenciamento</label>
+      <input type="number" name="credentialWarningDays" id="alert-cred-days" min="1" value="30">
+    </div>
+    <div class="btn-group">
+      <button type="button" class="btn btn-primary btn-sm" onclick="salvarConfigAlerta()">Salvar Configuracao</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="executarAlertasManual()">Executar Alertas Agora</button>
+    </div>
+  </form>
+</div>
+
+<script>
+function initAlertasPanel() {
+  carregarAlertas();
+  carregarConfigAlertas();
+}
+
+function carregarAlertas() {
+  callServer('getAlertasAtivos').then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderAlertas(result.data);
+  });
+}
+
+function renderAlertas(alertas) {
+  var container = document.getElementById('alertas-list');
+  if (alertas.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted text-small">Nenhum alerta ativo.</p></div>';
+    return;
+  }
+
+  var html = '';
+  alertas.forEach(function(a) {
+    var isWarning = a.alerta.indexOf('PROXIMO') !== -1 || a.alerta.indexOf('VENCENDO') !== -1;
+    html += '<div class="alert-item' + (isWarning ? ' warning' : '') + '">'
+      + '<strong>' + a.processo + '</strong> — ' + (a.descricao || '') + '<br>'
+      + '<span class="text-small">' + a.alerta + '</span>'
+      + '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function carregarConfigAlertas() {
+  callServer('getConfigAlertas').then(function(config) {
+    document.getElementById('alert-recipients').value = config.recipients || '';
+    document.getElementById('alert-warning-days').value = config.thresholds.overdueWarningDays || 3;
+    document.getElementById('alert-stale-days').value = config.thresholds.staleDays || 15;
+    document.getElementById('alert-cred-days').value = config.thresholds.credentialWarningDays || 30;
+  });
+}
+
+function salvarConfigAlerta() {
+  var config = {
+    recipients: document.getElementById('alert-recipients').value,
+    thresholds: {
+      overdueWarningDays: parseInt(document.getElementById('alert-warning-days').value, 10),
+      staleDays: parseInt(document.getElementById('alert-stale-days').value, 10),
+      credentialWarningDays: parseInt(document.getElementById('alert-cred-days').value, 10)
+    }
+  };
+
+  callServer('salvarConfigAlertas', config).then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+  });
+}
+
+function executarAlertasManual() {
+  callServer('executarAlertasDiarios').then(function() {
+    showToast('Alertas executados com sucesso.', 'success');
+    carregarAlertas();
+  }).catch(function() {
+    showToast('Erro ao executar alertas.', 'error');
+  });
+}
+</script>
+`,
+
+  'Panel_Config': `<!-- Painel de Configuracao -->
+<div class="card">
+  <div class="card-title">Configuracao do Sistema</div>
+  <p class="text-small text-muted">Workflow DINT / FGV v2.0</p>
+</div>
+
+<div class="card">
+  <div class="card-title">Normativos Implementados</div>
+  <ul id="normativos-list" style="padding-left:16px;font-size:12px;"></ul>
+</div>
+
+<div class="card">
+  <div class="card-title">Triggers Automaticos</div>
+  <p class="text-small text-muted mb-8">
+    Instale os triggers para ativar alertas diarios, relatorios semanais
+    e atualizacao automatica do dashboard.
+  </p>
+  <div class="btn-group">
+    <button class="btn btn-primary btn-sm" onclick="instalarTriggers()">Instalar Triggers</button>
+    <button class="btn btn-danger btn-sm" onclick="removerTriggers()">Remover Triggers</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Acoes do Sistema</div>
+  <div class="btn-group" style="flex-wrap:wrap;">
+    <button class="btn btn-secondary btn-sm" onclick="atualizarDashboardConfig()">Atualizar Dashboard</button>
+    <button class="btn btn-secondary btn-sm" onclick="executarAlertasConfig()">Executar Alertas</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Log de Acoes</div>
+  <div class="form-group">
+    <select id="log-filter-acao" style="padding:6px;font-size:12px;">
+      <option value="">Todas as acoes</option>
+      <option value="CRIAR_PROCESSO">Criar Processo</option>
+      <option value="EDITAR_PROCESSO">Editar Processo</option>
+      <option value="CANCELAR_PROCESSO">Cancelar Processo</option>
+      <option value="CONCLUIR_ETAPA">Concluir Etapa</option>
+      <option value="CRIAR_FORNECEDOR">Criar Fornecedor</option>
+      <option value="ERROR">Erros</option>
+      <option value="LOCK_FAILURE">Falhas de Lock</option>
+    </select>
+  </div>
+  <button class="btn btn-secondary btn-sm mb-8" onclick="consultarLogConfig()">Consultar Log</button>
+  <div id="log-results"></div>
+</div>
+
+<script>
+function initConfigPanel() {
+  // Listar normativos
+  var normativos = ['NP AC.03.004', 'NP AC.03.006', 'NP AC.03.002', 'NP AF.03.003', 'Portaria 24/2024'];
+  var list = document.getElementById('normativos-list');
+  normativos.forEach(function(n) {
+    list.innerHTML += '<li>' + n + '</li>';
+  });
+}
+
+function instalarTriggers() {
+  callServer('installTriggers').then(function() {
+    showToast('Triggers instalados com sucesso.', 'success');
+  });
+}
+
+function removerTriggers() {
+  callServer('removeTriggers').then(function() {
+    showToast('Triggers removidos.', 'success');
+  });
+}
+
+function atualizarDashboardConfig() {
+  callServer('refreshDashboard').then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+  });
+}
+
+function executarAlertasConfig() {
+  callServer('executarAlertasDiarios').then(function() {
+    showToast('Alertas executados.', 'success');
+  });
+}
+
+function consultarLogConfig() {
+  var acao = document.getElementById('log-filter-acao').value;
+  var filters = {};
+  if (acao) filters.acao = acao;
+  filters.limite = 50;
+
+  callServer('consultarLog', filters).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderLog(result.data);
+  });
+}
+
+function renderLog(entries) {
+  var container = document.getElementById('log-results');
+  if (entries.length === 0) {
+    container.innerHTML = '<p class="text-muted text-small">Nenhum registro encontrado.</p>';
+    return;
+  }
+
+  var html = '<table class="data-table"><thead><tr>'
+    + '<th>Data/Hora</th><th>Usuario</th><th>Acao</th><th>Detalhes</th>'
+    + '</tr></thead><tbody>';
+
+  entries.forEach(function(e) {
+    html += '<tr>'
+      + '<td class="text-small">' + e.dataHora + '</td>'
+      + '<td class="text-small">' + e.usuario + '</td>'
+      + '<td class="text-small">' + e.acao + '</td>'
+      + '<td class="text-small">' + (e.detalhes || '').substring(0, 60) + '</td>'
+      + '</tr>';
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+</script>
+`
+
+};
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 1: Funcoes auxiliares para templates embutidos                   █
+// ████████████████████████████████████████████████████████████████████████████
+
+/**
+ * Retorna o conteudo de um template HTML embutido.
+ * Substitui a funcao original que usava HtmlService.createHtmlOutputFromFile().
+ * Uso em HTML: <?!= include('Sidebar_CSS') ?>
+ * No modo consolidado, os includes ja sao resolvidos por createTemplateFromEmbedded_().
+ * Esta funcao ainda e util se chamada diretamente do client-side via google.script.run.
+ *
+ * @param {string} filename - Nome do template (sem .html)
+ * @returns {string} Conteudo HTML
+ */
+function include(filename) {
+  return HTML_TEMPLATES[filename] || '';
+}
+
+/**
+ * Cria um HtmlOutput a partir de um template HTML embutido.
+ * Resolve todas as chamadas <?!= include('...') ?> substituindo pelo conteudo real.
+ * Substitui HtmlService.createTemplateFromFile('X').evaluate().
+ *
+ * @param {string} name - Nome do template (sem .html)
+ * @returns {GoogleAppsScript.HTML.HtmlOutput}
+ */
+function createTemplateFromEmbedded_(name) {
+  var content = HTML_TEMPLATES[name] || '';
+  // Resolver chamadas include() embutidas nos templates
+  content = content.replace(/<\?!=\s*include\(['"](\w+)['"]\)\s*\?>/g, function(match, fname) {
+    return HTML_TEMPLATES[fname] || '';
+  });
+  return HtmlService.createHtmlOutput(content);
+}
+
+/**
+ * Cria um HtmlOutput para o Dialog_Confirm com dados de acao injetados.
+ * Substitui o uso de template data (<?!= JSON.stringify(actionData || {}) ?>)
+ * por uma tag <script> que define a variavel actionData antes do codigo do dialog.
+ *
+ * @param {Object} actionData - Dados da acao (message, danger, confirmLabel, serverFunction, args)
+ * @returns {GoogleAppsScript.HTML.HtmlOutput}
+ */
+function createConfirmDialog_(actionData) {
+  var content = HTML_TEMPLATES['Dialog_Confirm'] || '';
+  // Substituir o scriptlet de dados do template por dados reais via <script>
+  // O template original tem: var actionData = <?!= JSON.stringify(actionData || {}) ?>;
+  // Substituimos por: var actionData = {dados_reais};
+  content = content.replace(
+    /var actionData = <\?!=.*?\?>;/,
+    'var actionData = ' + JSON.stringify(actionData || {}) + ';'
+  );
+  // Resolver outros includes se houver
+  content = content.replace(/<\?!=\s*include\(['"](\w+)['"]\)\s*\?>/g, function(match, fname) {
+    return HTML_TEMPLATES[fname] || '';
+  });
+  return HtmlService.createHtmlOutput(content);
+}
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 2: 00_Config ████████████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
 
 /**
  * ============================================================
@@ -211,6 +1858,12 @@ var NORMATIVES = [
   'NP AF.03.003',
   'Portaria 24/2024'
 ];
+
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 3: 11_Utils █████████████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
+
 /**
  * ============================================================
  * WORKFLOW DINT / FGV v2.0 — Utilitários
@@ -221,16 +1874,8 @@ var NORMATIVES = [
  */
 
 // ── HTML Template Include ───────────────────────────────────
-
-/**
- * Inclui o conteúdo de um arquivo HTML em um template.
- * Uso em HTML: <?!= include('Sidebar_CSS') ?>
- * @param {string} filename - Nome do arquivo (sem .html)
- * @returns {string}
- */
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
+// NOTA: A funcao include() original foi movida para a Secao 1
+// (funcoes auxiliares de templates embutidos).
 
 // ── Validação de CNPJ ───────────────────────────────────────
 
@@ -460,6 +2105,12 @@ function diffDays(dateA, dateB) {
   var b = new Date(dateB.getFullYear(), dateB.getMonth(), dateB.getDate());
   return Math.round((a - b) / (1000 * 60 * 60 * 24));
 }
+
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 4: 10_Log ███████████████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
+
 /**
  * ============================================================
  * WORKFLOW DINT / FGV v2.0 — Registro de Auditoria (Log)
@@ -573,6 +2224,12 @@ function consultarLog(filters) {
     return { success: false, data: [], message: 'Erro ao consultar log: ' + e.message };
   }
 }
+
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 5: 02_Lock ██████████████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
+
 /**
  * ============================================================
  * WORKFLOW DINT / FGV v2.0 — Controle de Concorrência
@@ -638,6 +2295,12 @@ function withDocumentLock(callback, operationName) {
     lock.releaseLock();
   }
 }
+
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 6: 03_DataAccess ████████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
+
 /**
  * ============================================================
  * WORKFLOW DINT / FGV v2.0 — Camada de Acesso a Dados (DAL)
@@ -839,6 +2502,12 @@ var DAL = {
     }
   }
 };
+
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 7: 07_BusinessRules █████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
+
 /**
  * ============================================================
  * WORKFLOW DINT / FGV v2.0 — Motor de Regras Normativas
@@ -997,6 +2666,12 @@ function descreverRequisitos(flags) {
     ? 'Obrigatorios: ' + obrigatorios.join(', ')
     : 'Nenhuma exigencia adicional';
 }
+
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 8: 06_Etapas ████████████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
+
 /**
  * ============================================================
  * WORKFLOW DINT / FGV v2.0 — Gestão de Etapas
@@ -1315,6 +2990,12 @@ function atualizarStatusProcesso_(processoId, novoStatus) {
     DAL.updateRow(SHEET.PROCESSOS, proc.rowIndex, proc.data);
   }
 }
+
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 9: 04_Processos █████████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
+
 /**
  * ============================================================
  * WORKFLOW DINT / FGV v2.0 — Gestão de Processos
@@ -1807,6 +3488,12 @@ function getFormOptions() {
     formasContratacao:     FORMAS_CONTRATACAO
   };
 }
+
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 10: 05_Fornecedores █████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
+
 /**
  * ============================================================
  * WORKFLOW DINT / FGV v2.0 — Gestão de Fornecedores
@@ -2092,6 +3779,12 @@ function atualizarCredenciamento(cnpjCpf, status, validade) {
     return { success: false, message: e.message };
   }
 }
+
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 11: 08_Dashboard ████████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
+
 /**
  * ============================================================
  * WORKFLOW DINT / FGV v2.0 — Dashboard
@@ -2258,6 +3951,12 @@ function getDashboardData() {
     return { success: false, data: null, message: 'Erro: ' + e.message };
   }
 }
+
+
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 12: 09_Alertas ██████████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
+
 /**
  * ============================================================
  * WORKFLOW DINT / FGV v2.0 — Sistema de Alertas
@@ -2655,24 +4354,21 @@ function atualizarColunasAlerta_(processos, alerts) {
 }
 
 
-// ╔════════════════════════════════════════════════════════════╗
-// ║  PARTE 2: ENTRY POINT, MENU E SIDEBAR (consolidado)      ║
-// ╚════════════════════════════════════════════════════════════╝
+// ████████████████████████████████████████████████████████████████████████████
+// █ SECAO 13: 01_Main █████████████████████████████████████████████████
+// ████████████████████████████████████████████████████████████████████████████
 
 /**
  * ============================================================
- * WORKFLOW DINT / FGV v2.0 — Entry Point, Menu e HTML Inline
+ * WORKFLOW DINT / FGV v2.0 — Entry Point e Menu
  * ============================================================
- * onOpen, onInstall, menu customizado, sidebar com HTML embutido
- * e funcoes de painel que retornam HTML como strings.
- *
- * Todo o HTML (CSS, JS, templates) esta embutido diretamente
- * neste arquivo usando template literals (V8 runtime).
+ * onOpen, onInstall, menu customizado e funções de
+ * lançamento do sidebar.
  * ============================================================
  */
 
 /**
- * Trigger simples — executado quando a planilha e aberta.
+ * Trigger simples — executado quando a planilha é aberta.
  * Cria o menu customizado.
  */
 function onOpen(e) {
@@ -2697,669 +4393,19 @@ function onOpen(e) {
 }
 
 /**
- * Executado quando o add-on e instalado.
+ * Executado quando o add-on é instalado.
  */
 function onInstall(e) {
   onOpen(e);
 }
 
-// ── Sidebar HTML Inline ──────────────────────────────────────
+// ── Sidebar Launchers ───────────────────────────────────────
 
 /**
- * Retorna o HTML completo do sidebar como string.
- * Inclui CSS, estrutura HTML e JavaScript embutidos.
- */
-function getSidebarHtmlString_() {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <base target="_top">
-  <style>
-  /* ── Reset & Base ──────────────────────────────────── */
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'Google Sans', Roboto, Arial, sans-serif;
-    font-size: 13px;
-    color: #202124;
-    background: #fff;
-    line-height: 1.5;
-  }
-
-  /* ── Navigation Bar ────────────────────────────────── */
-  .nav-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 8px;
-    background: #1a73e8;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .nav-btn {
-    flex: 1;
-    min-width: 70px;
-    padding: 6px 4px;
-    border: none;
-    border-radius: 4px;
-    background: rgba(255,255,255,0.15);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 500;
-    cursor: pointer;
-    text-align: center;
-    transition: background 0.2s;
-  }
-  .nav-btn:hover { background: rgba(255,255,255,0.3); }
-  .nav-btn.active { background: #fff; color: #1a73e8; }
-
-  /* ── Content Area ──────────────────────────────────── */
-  #content-area { padding: 12px; }
-
-  /* ── Cards & Panels ────────────────────────────────── */
-  .card {
-    background: #f8f9fa;
-    border: 1px solid #dadce0;
-    border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 12px;
-  }
-  .card-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #1a73e8;
-    margin-bottom: 8px;
-  }
-
-  /* ── KPI Cards ─────────────────────────────────────── */
-  .kpi-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-bottom: 12px;
-  }
-  .kpi-card {
-    background: #e8f0fe;
-    border-radius: 8px;
-    padding: 10px;
-    text-align: center;
-  }
-  .kpi-value {
-    font-size: 22px;
-    font-weight: 700;
-    color: #1a73e8;
-  }
-  .kpi-label {
-    font-size: 11px;
-    color: #5f6368;
-    margin-top: 2px;
-  }
-
-  /* ── Forms ─────────────────────────────────────────── */
-  .form-group {
-    margin-bottom: 10px;
-  }
-  .form-group label {
-    display: block;
-    font-size: 12px;
-    font-weight: 500;
-    color: #5f6368;
-    margin-bottom: 3px;
-  }
-  .form-group input,
-  .form-group select,
-  .form-group textarea {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #dadce0;
-    border-radius: 4px;
-    font-size: 13px;
-    font-family: inherit;
-    transition: border-color 0.2s;
-  }
-  .form-group input:focus,
-  .form-group select:focus,
-  .form-group textarea:focus {
-    outline: none;
-    border-color: #1a73e8;
-    box-shadow: 0 0 0 2px rgba(26,115,232,0.1);
-  }
-  .form-group textarea { resize: vertical; min-height: 60px; }
-
-  /* ── Buttons ───────────────────────────────────────── */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.2s, box-shadow 0.2s;
-  }
-  .btn-primary {
-    background: #1a73e8;
-    color: #fff;
-  }
-  .btn-primary:hover { background: #1557b0; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-  .btn-secondary {
-    background: #f1f3f4;
-    color: #3c4043;
-  }
-  .btn-secondary:hover { background: #e8eaed; }
-  .btn-danger {
-    background: #ea4335;
-    color: #fff;
-  }
-  .btn-danger:hover { background: #c5221f; }
-  .btn-success {
-    background: #34a853;
-    color: #fff;
-  }
-  .btn-success:hover { background: #2d8e47; }
-  .btn-sm { padding: 4px 10px; font-size: 11px; }
-  .btn-block { width: 100%; }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .btn-group {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
-  }
-
-  /* ── Tables ────────────────────────────────────────── */
-  .data-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-    margin-top: 8px;
-  }
-  .data-table th {
-    background: #f1f3f4;
-    padding: 6px 8px;
-    text-align: left;
-    font-weight: 600;
-    color: #5f6368;
-    border-bottom: 2px solid #dadce0;
-    white-space: nowrap;
-  }
-  .data-table td {
-    padding: 6px 8px;
-    border-bottom: 1px solid #f1f3f4;
-  }
-  .data-table tr:hover td { background: #f8f9fa; }
-  .data-table .clickable { cursor: pointer; color: #1a73e8; }
-  .data-table .clickable:hover { text-decoration: underline; }
-
-  /* ── Status Badges ─────────────────────────────────── */
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 500;
-  }
-  .badge-andamento { background: #e8f0fe; color: #1a73e8; }
-  .badge-concluido { background: #e6f4ea; color: #137333; }
-  .badge-cancelado { background: #fce8e6; color: #c5221f; }
-  .badge-suspenso  { background: #fef7e0; color: #ea8600; }
-  .badge-pendente  { background: #f1f3f4; color: #5f6368; }
-  .badge-na        { background: #f1f3f4; color: #9aa0a6; }
-
-  /* ── Timeline (Etapas) ─────────────────────────────── */
-  .timeline { list-style: none; padding-left: 0; }
-  .timeline-item {
-    position: relative;
-    padding: 8px 0 8px 24px;
-    border-left: 2px solid #dadce0;
-  }
-  .timeline-item:last-child { border-left: 2px solid transparent; }
-  .timeline-item::before {
-    content: '';
-    position: absolute;
-    left: -6px;
-    top: 12px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #dadce0;
-  }
-  .timeline-item.active::before { background: #1a73e8; }
-  .timeline-item.done::before   { background: #34a853; }
-  .timeline-item.na::before     { background: #9aa0a6; }
-  .timeline-item .tl-title { font-weight: 500; font-size: 12px; }
-  .timeline-item .tl-meta  { font-size: 11px; color: #5f6368; }
-
-  /* ── Loading Overlay ───────────────────────────────── */
-  #loading-overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(255,255,255,0.7);
-    z-index: 999;
-    align-items: center;
-    justify-content: center;
-  }
-  #loading-overlay.show { display: flex; }
-  .spinner {
-    width: 32px; height: 32px;
-    border: 3px solid #dadce0;
-    border-top-color: #1a73e8;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── Toast Notifications ───────────────────────────── */
-  #toast-container {
-    position: fixed;
-    bottom: 12px; left: 12px; right: 12px;
-    z-index: 1000;
-  }
-  .toast {
-    padding: 10px 14px;
-    border-radius: 8px;
-    margin-top: 6px;
-    font-size: 12px;
-    animation: slideUp 0.3s ease;
-  }
-  .toast-success { background: #e6f4ea; color: #137333; border: 1px solid #ceead6; }
-  .toast-error   { background: #fce8e6; color: #c5221f; border: 1px solid #f5c6cb; }
-  .toast-warning { background: #fef7e0; color: #ea8600; border: 1px solid #feefc3; }
-  @keyframes slideUp {
-    from { transform: translateY(20px); opacity: 0; }
-    to   { transform: translateY(0); opacity: 1; }
-  }
-
-  /* ── Alerts Panel ──────────────────────────────────── */
-  .alert-item {
-    padding: 8px;
-    border-left: 3px solid #ea4335;
-    background: #fce8e6;
-    border-radius: 0 4px 4px 0;
-    margin-bottom: 6px;
-    font-size: 12px;
-  }
-  .alert-item.warning {
-    border-left-color: #ea8600;
-    background: #fef7e0;
-  }
-
-  /* ── Search Bar ────────────────────────────────────── */
-  .search-bar {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 12px;
-  }
-  .search-bar input {
-    flex: 1;
-    padding: 8px;
-    border: 1px solid #dadce0;
-    border-radius: 4px;
-    font-size: 13px;
-  }
-
-  /* ── Home Panel ────────────────────────────────────── */
-  .home-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  .home-card {
-    background: #f8f9fa;
-    border: 1px solid #dadce0;
-    border-radius: 8px;
-    padding: 16px 12px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .home-card:hover {
-    border-color: #1a73e8;
-    box-shadow: 0 2px 8px rgba(26,115,232,0.15);
-  }
-  .home-card .icon { font-size: 24px; margin-bottom: 6px; }
-  .home-card .label { font-size: 12px; font-weight: 500; color: #3c4043; }
-
-  /* ── Utility ───────────────────────────────────────── */
-  .text-center { text-align: center; }
-  .text-muted  { color: #5f6368; }
-  .text-small  { font-size: 11px; }
-  .mt-8  { margin-top: 8px; }
-  .mt-12 { margin-top: 12px; }
-  .mb-8  { margin-bottom: 8px; }
-  .mb-12 { margin-bottom: 12px; }
-  .hidden { display: none; }
-</style>
-</head>
-<body>
-  <!-- Navigation Bar -->
-  <div class="nav-bar">
-    <button class="nav-btn active" data-panel="home" onclick="navigateTo('home')">Home</button>
-    <button class="nav-btn" data-panel="processos" onclick="navigateTo('processos')">Processos</button>
-    <button class="nav-btn" data-panel="fornecedores" onclick="navigateTo('fornecedores')">Fornecedores</button>
-    <button class="nav-btn" data-panel="dashboard" onclick="navigateTo('dashboard')">Dashboard</button>
-    <button class="nav-btn" data-panel="alertas" onclick="navigateTo('alertas')">Alertas</button>
-    <button class="nav-btn" data-panel="config" onclick="navigateTo('config')">Config</button>
-  </div>
-
-  <!-- Content Area (SPA) -->
-  <div id="content-area">
-    <div class="text-center mt-12">
-      <div class="spinner" style="margin: 40px auto;"></div>
-      <p class="text-muted text-small">Carregando...</p>
-    </div>
-  </div>
-
-  <!-- Loading Overlay -->
-  <div id="loading-overlay">
-    <div class="spinner"></div>
-  </div>
-
-  <!-- Toast Container -->
-  <div id="toast-container"></div>
-
-  <script>
-/**
- * ============================================================
- * WORKFLOW DINT / FGV v2.0 — Client-Side JavaScript
- * ============================================================
- * Wrapper para google.script.run, navegação SPA,
- * loading states e toast notifications.
- * ============================================================
- */
-
-// ── Server Call Wrapper ─────────────────────────────────────
-
-/**
- * Chama uma função server-side com Promise semantics.
- * Exibe loading overlay e trata erros com toast.
- *
- * @param {string} functionName - Nome da função no servidor
- * @param {...*} args - Argumentos para a função
- * @returns {Promise<*>}
- */
-function callServer(functionName) {
-  var args = Array.prototype.slice.call(arguments, 1);
-  showLoading();
-
-  return new Promise(function(resolve, reject) {
-    var runner = google.script.run
-      .withSuccessHandler(function(result) {
-        hideLoading();
-        resolve(result);
-      })
-      .withFailureHandler(function(error) {
-        hideLoading();
-        var msg = error.message || error || 'Erro inesperado';
-        // Auto-retry para erros de lock
-        if (msg.indexOf('sistema esta ocupado') !== -1) {
-          showToast('Sistema ocupado. Tentando novamente...', 'warning');
-          setTimeout(function() {
-            var retryArgs = [functionName].concat(args);
-            callServerNoRetry.apply(null, retryArgs).then(resolve).catch(reject);
-          }, 3000);
-        } else {
-          showToast(msg, 'error');
-          reject(error);
-        }
-      });
-
-    runner[functionName].apply(runner, args);
-  });
-}
-
-/**
- * Versão sem auto-retry do callServer.
- */
-function callServerNoRetry(functionName) {
-  var args = Array.prototype.slice.call(arguments, 1);
-  showLoading();
-
-  return new Promise(function(resolve, reject) {
-    var runner = google.script.run
-      .withSuccessHandler(function(result) {
-        hideLoading();
-        resolve(result);
-      })
-      .withFailureHandler(function(error) {
-        hideLoading();
-        showToast(error.message || 'Erro inesperado', 'error');
-        reject(error);
-      });
-
-    runner[functionName].apply(runner, args);
-  });
-}
-
-// ── Navigation ──────────────────────────────────────────────
-
-var currentPanel = 'home';
-
-/**
- * Navega para um painel específico.
- * @param {string} panelName
- * @param {Object} [params] - Parâmetros opcionais para o painel
- */
-function navigateTo(panelName, params) {
-  currentPanel = panelName;
-
-  // Atualizar botões ativos
-  var btns = document.querySelectorAll('.nav-btn');
-  btns.forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.panel === panelName);
-  });
-
-  var contentArea = document.getElementById('content-area');
-
-  switch (panelName) {
-    case 'home':
-      renderHomePanel();
-      break;
-    case 'processos':
-    case 'processos-consulta':
-      loadPanel('getPanelProcessos', function() { initProcessosPanel('consulta'); });
-      break;
-    case 'processos-novo':
-      loadPanel('getPanelProcessos', function() { initProcessosPanel('novo'); });
-      break;
-    case 'fornecedores':
-    case 'fornecedores-consulta':
-      loadPanel('getPanelFornecedores', function() { initFornecedoresPanel('consulta'); });
-      break;
-    case 'fornecedores-novo':
-      loadPanel('getPanelFornecedores', function() { initFornecedoresPanel('novo'); });
-      break;
-    case 'etapas':
-      loadPanel('getPanelEtapas', function() { initEtapasPanel(params); });
-      break;
-    case 'dashboard':
-      loadPanel('getPanelDashboard', function() { initDashboardPanel(); });
-      break;
-    case 'alertas':
-      loadPanel('getPanelAlertas', function() { initAlertasPanel(); });
-      break;
-    case 'config':
-      loadPanel('getPanelConfig', function() { initConfigPanel(); });
-      break;
-    default:
-      renderHomePanel();
-  }
-}
-
-/**
- * Carrega HTML de um painel server-side e injeta no content area.
- * @param {string} serverFunction
- * @param {Function} [initCallback] - Chamado após injeção
- */
-function loadPanel(serverFunction, initCallback) {
-  callServer(serverFunction).then(function(html) {
-    document.getElementById('content-area').innerHTML = html;
-    if (initCallback) initCallback();
-  }).catch(function() {
-    document.getElementById('content-area').innerHTML =
-      '<div class="card text-center"><p class="text-muted">Erro ao carregar painel.</p></div>';
-  });
-}
-
-/**
- * Renderiza o painel Home (ícones de navegação).
- */
-function renderHomePanel() {
-  var html = '<div class="card">'
-    + '<div class="card-title">Workflow DINT / FGV v2.0</div>'
-    + '<p class="text-small text-muted mb-12">Controle de Contratacoes — Diretoria Internacional</p>'
-    + '</div>'
-    + '<div class="home-grid">'
-    + '<div class="home-card" onclick="navigateTo(\\'processos\\')"><div class="icon">&#128203;</div><div class="label">Processos</div></div>'
-    + '<div class="home-card" onclick="navigateTo(\\'fornecedores\\')"><div class="icon">&#127970;</div><div class="label">Fornecedores</div></div>'
-    + '<div class="home-card" onclick="navigateTo(\\'dashboard\\')"><div class="icon">&#128202;</div><div class="label">Dashboard</div></div>'
-    + '<div class="home-card" onclick="navigateTo(\\'alertas\\')"><div class="icon">&#128276;</div><div class="label">Alertas</div></div>'
-    + '<div class="home-card" onclick="navigateTo(\\'config\\')"><div class="icon">&#9881;</div><div class="label">Configuracao</div></div>'
-    + '</div>'
-    + '<p class="text-small text-muted text-center mt-12">v2.0 — Powered by Google Apps Script</p>';
-
-  document.getElementById('content-area').innerHTML = html;
-}
-
-// ── Loading Overlay ─────────────────────────────────────────
-
-function showLoading() {
-  var overlay = document.getElementById('loading-overlay');
-  if (overlay) overlay.classList.add('show');
-}
-
-function hideLoading() {
-  var overlay = document.getElementById('loading-overlay');
-  if (overlay) overlay.classList.remove('show');
-}
-
-// ── Toast Notifications ─────────────────────────────────────
-
-/**
- * Exibe uma notificação toast.
- * @param {string} message
- * @param {string} type - 'success', 'error', 'warning'
- * @param {number} [duration=4000] - ms para auto-dismiss
- */
-function showToast(message, type, duration) {
-  type = type || 'success';
-  duration = duration || 4000;
-
-  var container = document.getElementById('toast-container');
-  if (!container) return;
-
-  var toast = document.createElement('div');
-  toast.className = 'toast toast-' + type;
-  toast.textContent = message;
-  container.appendChild(toast);
-
-  setTimeout(function() {
-    toast.style.opacity = '0';
-    toast.style.transition = 'opacity 0.3s';
-    setTimeout(function() { toast.remove(); }, 300);
-  }, duration);
-}
-
-// ── Form Helpers ────────────────────────────────────────────
-
-/**
- * Coleta dados de um formulário por ID.
- * @param {string} formId
- * @returns {Object}
- */
-function collectFormData(formId) {
-  var form = document.getElementById(formId);
-  if (!form) return {};
-
-  var data = {};
-  var inputs = form.querySelectorAll('input, select, textarea');
-  inputs.forEach(function(input) {
-    if (input.name) {
-      data[input.name] = input.value;
-    }
-  });
-  return data;
-}
-
-/**
- * Preenche um formulário com dados.
- * @param {string} formId
- * @param {Object} data
- */
-function fillFormData(formId, data) {
-  var form = document.getElementById(formId);
-  if (!form || !data) return;
-
-  Object.keys(data).forEach(function(key) {
-    var input = form.querySelector('[name="' + key + '"]');
-    if (input) {
-      input.value = data[key] || '';
-    }
-  });
-}
-
-/**
- * Reseta um formulário.
- * @param {string} formId
- */
-function resetForm(formId) {
-  var form = document.getElementById(formId);
-  if (form) form.reset();
-}
-
-// ── Status Badge Helper ─────────────────────────────────────
-
-/**
- * Retorna HTML de badge baseado no status.
- * @param {string} status
- * @returns {string}
- */
-function statusBadge(status) {
-  var cls = 'badge-pendente';
-  switch (status) {
-    case 'Em Andamento': cls = 'badge-andamento'; break;
-    case 'Concluido':    cls = 'badge-concluido'; break;
-    case 'Cancelado':    cls = 'badge-cancelado'; break;
-    case 'Suspenso':     cls = 'badge-suspenso';  break;
-    case 'N/A':          cls = 'badge-na';         break;
-  }
-  return '<span class="badge ' + cls + '">' + (status || 'Pendente') + '</span>';
-}
-
-// ── Initialize on Load ──────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', function() {
-  // Verificar se há painel pré-definido
-  callServer('getInitialPanel').then(function(panel) {
-    if (panel && panel !== 'home') {
-      navigateTo(panel);
-    } else {
-      renderHomePanel();
-    }
-  }).catch(function() {
-    renderHomePanel();
-  });
-});
-</script>
-</body>
-</html>
-`;
-}
-
-// ── Sidebar Launchers ────────────────────────────────────────
-
-/**
- * Abre o sidebar principal (painel de navegacao).
+ * Abre o sidebar principal (painel de navegação).
  */
 function showSidebarMain() {
-  var htmlString = getSidebarHtmlString_();
-  var html = HtmlService.createHtmlOutput(htmlString)
+  var html = createTemplateFromEmbedded_('Sidebar_Main')
     .setTitle('Workflow DINT / FGV v2.0')
     .setWidth(420);
   SpreadsheetApp.getUi().showSidebar(html);
@@ -3398,7 +4444,7 @@ function showSidebarFornecedorConsulta() {
 }
 
 /**
- * Abre o sidebar focado em configuracao.
+ * Abre o sidebar focado em configuração.
  */
 function showSidebarConfig() {
   setUserState('SIDEBAR_PANEL', 'config');
@@ -3413,7 +4459,7 @@ function showSidebarAlertas() {
   showSidebarMain();
 }
 
-// ── Funcoes de painel (retornam HTML para o sidebar SPA) ─────
+// ── Funções de painel (retornam HTML para o sidebar SPA) ────
 
 /**
  * Retorna o painel inicial do sidebar.
@@ -3421,7 +4467,7 @@ function showSidebarAlertas() {
  */
 function getInitialPanel() {
   var panel = getUserState('SIDEBAR_PANEL') || 'home';
-  // Limpar estado apos leitura
+  // Limpar estado após leitura
   setUserState('SIDEBAR_PANEL', '');
   return panel;
 }
@@ -3431,240 +4477,7 @@ function getInitialPanel() {
  * @returns {string}
  */
 function getPanelProcessos() {
-  return `<!-- Painel de Processos -->
-<div id="processos-view-consulta">
-  <div class="card">
-    <div class="card-title">Processos de Contratacao</div>
-    <div class="btn-group mb-8">
-      <button class="btn btn-primary btn-sm" onclick="showProcessoForm()">Novo Processo</button>
-    </div>
-    <div class="search-bar">
-      <input type="text" id="proc-search" placeholder="Buscar por ID, descricao ou fornecedor..." onkeyup="if(event.key==='Enter')buscarProcessos()">
-      <button class="btn btn-secondary btn-sm" onclick="buscarProcessos()">Buscar</button>
-    </div>
-    <div class="form-group">
-      <select id="proc-filter-status" onchange="buscarProcessos()" style="padding:6px;font-size:12px;">
-        <option value="">Todos os Status</option>
-        <option value="Em Andamento">Em Andamento</option>
-        <option value="Concluido">Concluido</option>
-        <option value="Cancelado">Cancelado</option>
-        <option value="Suspenso">Suspenso</option>
-      </select>
-    </div>
-  </div>
-  <div id="proc-results"></div>
-</div>
-
-<div id="processos-view-form" class="hidden">
-  <div class="card">
-    <div class="card-title" id="proc-form-title">Novo Processo</div>
-    <form id="proc-form">
-      <input type="hidden" name="id" id="proc-form-id">
-      <div class="form-group">
-        <label>Descricao *</label>
-        <textarea name="descricao" required></textarea>
-      </div>
-      <div class="form-group">
-        <label>Tipo de Contratacao *</label>
-        <select name="tipoContratacao" required id="proc-tipo"></select>
-      </div>
-      <div class="form-group">
-        <label>Natureza do Terceiro *</label>
-        <select name="naturezaTerceiro" required id="proc-nat-terceiro"></select>
-      </div>
-      <div class="form-group">
-        <label>Natureza da Contratacao *</label>
-        <select name="naturezaContratacao" required id="proc-nat-contratacao"></select>
-      </div>
-      <div class="form-group">
-        <label>Forma de Contratacao *</label>
-        <select name="formaContratacao" required id="proc-forma"></select>
-      </div>
-      <div class="form-group">
-        <label>Valor Estimado (R$) *</label>
-        <input type="number" name="valorEstimado" step="0.01" min="0.01" required>
-      </div>
-      <div class="form-group">
-        <label>Fornecedor</label>
-        <input type="text" name="fornecedor">
-      </div>
-      <div class="form-group">
-        <label>CNPJ/CPF</label>
-        <input type="text" name="cnpjCpf">
-      </div>
-      <div class="form-group">
-        <label>Centro de Custo</label>
-        <input type="text" name="centroCusto">
-      </div>
-      <div class="form-group">
-        <label>Requisitante</label>
-        <input type="text" name="requisitante">
-      </div>
-      <div class="form-group">
-        <label>Prazo (dias)</label>
-        <input type="number" name="prazoPrevisto" value="30" min="1">
-      </div>
-      <div class="form-group">
-        <label>Estrutura</label>
-        <input type="text" name="estrutura">
-      </div>
-      <div class="form-group">
-        <label>Observacoes</label>
-        <textarea name="observacoes"></textarea>
-      </div>
-      <div class="btn-group">
-        <button type="button" class="btn btn-primary" onclick="salvarProcesso()">Salvar</button>
-        <button type="button" class="btn btn-secondary" onclick="hideProcessoForm()">Cancelar</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<script>
-var editingProcessoId = null;
-
-function initProcessosPanel(mode) {
-  // Carregar opções dos dropdowns
-  callServer('getFormOptions').then(function(opts) {
-    populateSelect('proc-tipo', opts.tiposContratacao);
-    populateSelect('proc-nat-terceiro', opts.naturezasTerceiro);
-    populateSelect('proc-nat-contratacao', opts.naturezasContratacao);
-    populateSelect('proc-forma', opts.formasContratacao);
-  });
-
-  if (mode === 'novo') {
-    showProcessoForm();
-  } else {
-    buscarProcessos();
-  }
-}
-
-function populateSelect(id, options) {
-  var sel = document.getElementById(id);
-  if (!sel) return;
-  sel.innerHTML = '<option value="">Selecione...</option>';
-  options.forEach(function(opt) {
-    sel.innerHTML += '<option value="' + opt + '">' + opt + '</option>';
-  });
-}
-
-function buscarProcessos() {
-  var busca = document.getElementById('proc-search').value;
-  var status = document.getElementById('proc-filter-status').value;
-  var filters = {};
-  if (busca) filters.busca = busca;
-  if (status) filters.status = status;
-
-  callServer('consultarProcessos', filters).then(function(result) {
-    if (!result.success) {
-      showToast(result.message, 'error');
-      return;
-    }
-    renderProcessosList(result.data);
-  });
-}
-
-function renderProcessosList(processos) {
-  var container = document.getElementById('proc-results');
-  if (processos.length === 0) {
-    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhum processo encontrado.</p></div>';
-    return;
-  }
-
-  var html = '<table class="data-table"><thead><tr>'
-    + '<th>ID</th><th>Status</th><th>Etapa</th><th>Descricao</th><th>Dias</th><th>Acoes</th>'
-    + '</tr></thead><tbody>';
-
-  processos.forEach(function(p) {
-    html += '<tr>'
-      + '<td class="clickable" onclick="verProcesso(\\'' + p.id + '\\')">' + p.id + '</td>'
-      + '<td>' + statusBadge(p.statusGeral) + '</td>'
-      + '<td class="text-small">' + (p.etapaAtual || '-') + '</td>'
-      + '<td class="text-small">' + (p.descricao || '').substring(0, 40) + '</td>'
-      + '<td>' + p.diasAberto + '</td>'
-      + '<td>'
-      + '<button class="btn btn-sm btn-secondary" onclick="editarProc(\\'' + p.id + '\\')">Editar</button> '
-      + '<button class="btn btn-sm btn-primary" onclick="verEtapas(\\'' + p.id + '\\')">Etapas</button>'
-      + '</td></tr>';
-  });
-
-  html += '</tbody></table>';
-  container.innerHTML = html;
-}
-
-function showProcessoForm() {
-  editingProcessoId = null;
-  document.getElementById('proc-form-title').textContent = 'Novo Processo';
-  document.getElementById('proc-form-id').value = '';
-  resetForm('proc-form');
-  document.getElementById('processos-view-consulta').classList.add('hidden');
-  document.getElementById('processos-view-form').classList.remove('hidden');
-}
-
-function hideProcessoForm() {
-  document.getElementById('processos-view-form').classList.add('hidden');
-  document.getElementById('processos-view-consulta').classList.remove('hidden');
-}
-
-function salvarProcesso() {
-  var data = collectFormData('proc-form');
-  if (editingProcessoId) {
-    callServer('editarProcesso', editingProcessoId, data).then(function(result) {
-      showToast(result.message, result.success ? 'success' : 'error');
-      if (result.success) { hideProcessoForm(); buscarProcessos(); }
-    });
-  } else {
-    callServer('criarProcesso', data).then(function(result) {
-      showToast(result.message, result.success ? 'success' : 'error');
-      if (result.success) { hideProcessoForm(); buscarProcessos(); }
-    });
-  }
-}
-
-function editarProc(id) {
-  callServer('getProcessoParaEdicao', id).then(function(result) {
-    if (!result.success) { showToast(result.message, 'error'); return; }
-    editingProcessoId = id;
-    document.getElementById('proc-form-title').textContent = 'Editar Processo ' + id;
-    document.getElementById('proc-form-id').value = id;
-    fillFormData('proc-form', result.data);
-    document.getElementById('processos-view-consulta').classList.add('hidden');
-    document.getElementById('processos-view-form').classList.remove('hidden');
-  });
-}
-
-function verProcesso(id) {
-  callServer('consultarProcessoPorId', id).then(function(result) {
-    if (!result.success) { showToast(result.message, 'error'); return; }
-    var p = result.data;
-    var html = '<div class="card">'
-      + '<div class="card-title">' + p.id + ' - ' + p.descricao + '</div>'
-      + '<p>' + statusBadge(p.statusGeral) + ' | Etapa: ' + (p.etapaAtual || '-') + '</p>'
-      + '<table class="data-table mt-8">'
-      + '<tr><td><strong>Tipo</strong></td><td>' + p.tipoContratacao + '</td></tr>'
-      + '<tr><td><strong>Nat. Terceiro</strong></td><td>' + p.naturezaTerceiro + '</td></tr>'
-      + '<tr><td><strong>Nat. Contratacao</strong></td><td>' + p.naturezaContratacao + '</td></tr>'
-      + '<tr><td><strong>Forma</strong></td><td>' + p.formaContratacao + '</td></tr>'
-      + '<tr><td><strong>Valor</strong></td><td>R$ ' + (p.valorEstimado || 0) + '</td></tr>'
-      + '<tr><td><strong>Fornecedor</strong></td><td>' + (p.fornecedor || '-') + '</td></tr>'
-      + '<tr><td><strong>Abertura</strong></td><td>' + (p.dataAbertura || '-') + '</td></tr>'
-      + '<tr><td><strong>Prazo</strong></td><td>' + (p.prazoPrevisto || '-') + '</td></tr>'
-      + '<tr><td><strong>Dias Aberto</strong></td><td>' + p.diasAberto + '</td></tr>'
-      + '</table>'
-      + '<div class="btn-group mt-8">'
-      + '<button class="btn btn-primary btn-sm" onclick="verEtapas(\\'' + p.id + '\\')">Ver Etapas</button>'
-      + '<button class="btn btn-secondary btn-sm" onclick="editarProc(\\'' + p.id + '\\')">Editar</button>'
-      + '<button class="btn btn-secondary btn-sm" onclick="buscarProcessos();hideProcessoForm()">Voltar</button>'
-      + '</div></div>';
-    document.getElementById('proc-results').innerHTML = html;
-  });
-}
-
-function verEtapas(id) {
-  navigateTo('etapas', { processoId: id });
-}
-</script>
-`;
+  return createTemplateFromEmbedded_('Panel_Processos').getContent();
 }
 
 /**
@@ -3672,163 +4485,7 @@ function verEtapas(id) {
  * @returns {string}
  */
 function getPanelFornecedores() {
-  return `<!-- Painel de Fornecedores -->
-<div id="forn-view-consulta">
-  <div class="card">
-    <div class="card-title">Fornecedores</div>
-    <div class="btn-group mb-8">
-      <button class="btn btn-primary btn-sm" onclick="showFornecedorForm()">Novo Fornecedor</button>
-    </div>
-    <div class="search-bar">
-      <input type="text" id="forn-search" placeholder="Buscar por razao social ou CNPJ/CPF..." onkeyup="if(event.key==='Enter')buscarFornecedores()">
-      <button class="btn btn-secondary btn-sm" onclick="buscarFornecedores()">Buscar</button>
-    </div>
-  </div>
-  <div id="forn-results"></div>
-</div>
-
-<div id="forn-view-form" class="hidden">
-  <div class="card">
-    <div class="card-title" id="forn-form-title">Novo Fornecedor</div>
-    <form id="forn-form">
-      <input type="hidden" name="originalCnpjCpf" id="forn-original-doc">
-      <div class="form-group">
-        <label>CNPJ/CPF *</label>
-        <input type="text" name="cnpjCpf" required id="forn-doc">
-      </div>
-      <div class="form-group">
-        <label>Razao Social *</label>
-        <input type="text" name="razaoSocial" required>
-      </div>
-      <div class="form-group">
-        <label>Tipo *</label>
-        <select name="tipo" required>
-          <option value="">Selecione...</option>
-          <option value="Pessoa Juridica">Pessoa Juridica</option>
-          <option value="Pessoa Fisica">Pessoa Fisica</option>
-          <option value="Organismo Internacional">Organismo Internacional</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Contato</label>
-        <input type="text" name="contato">
-      </div>
-      <div class="form-group">
-        <label>E-mail</label>
-        <input type="email" name="email">
-      </div>
-      <div class="form-group">
-        <label>Telefone</label>
-        <input type="text" name="telefone">
-      </div>
-      <div class="form-group">
-        <label>Dados Bancarios</label>
-        <textarea name="dadosBancarios"></textarea>
-      </div>
-      <div class="form-group">
-        <label>Observacoes</label>
-        <textarea name="observacoes"></textarea>
-      </div>
-      <div class="btn-group">
-        <button type="button" class="btn btn-primary" onclick="salvarFornecedor()">Salvar</button>
-        <button type="button" class="btn btn-secondary" onclick="hideFornecedorForm()">Cancelar</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<script>
-var editingFornecedor = null;
-
-function initFornecedoresPanel(mode) {
-  if (mode === 'novo') {
-    showFornecedorForm();
-  } else {
-    buscarFornecedores();
-  }
-}
-
-function buscarFornecedores() {
-  var busca = document.getElementById('forn-search').value;
-  var filters = {};
-  if (busca) filters.busca = busca;
-
-  callServer('consultarFornecedores', filters).then(function(result) {
-    if (!result.success) { showToast(result.message, 'error'); return; }
-    renderFornecedoresList(result.data);
-  });
-}
-
-function renderFornecedoresList(fornecedores) {
-  var container = document.getElementById('forn-results');
-  if (fornecedores.length === 0) {
-    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhum fornecedor encontrado.</p></div>';
-    return;
-  }
-
-  var html = '<table class="data-table"><thead><tr>'
-    + '<th>CNPJ/CPF</th><th>Razao Social</th><th>Tipo</th><th>Cadastro</th><th>Credenciamento</th><th>Acoes</th>'
-    + '</tr></thead><tbody>';
-
-  fornecedores.forEach(function(f) {
-    html += '<tr>'
-      + '<td class="text-small">' + f.cnpjCpf + '</td>'
-      + '<td>' + f.razaoSocial + '</td>'
-      + '<td class="text-small">' + (f.tipo || '-') + '</td>'
-      + '<td>' + statusBadge(f.statusCadastro || 'Pendente') + '</td>'
-      + '<td>' + statusBadge(f.statusCredenciamento || 'Pendente') + '</td>'
-      + '<td><button class="btn btn-sm btn-secondary" onclick="editarForn(\\'' + f.cnpjCpf + '\\')">Editar</button></td>'
-      + '</tr>';
-  });
-
-  html += '</tbody></table>';
-  container.innerHTML = html;
-}
-
-function showFornecedorForm() {
-  editingFornecedor = null;
-  document.getElementById('forn-form-title').textContent = 'Novo Fornecedor';
-  document.getElementById('forn-original-doc').value = '';
-  document.getElementById('forn-doc').disabled = false;
-  resetForm('forn-form');
-  document.getElementById('forn-view-consulta').classList.add('hidden');
-  document.getElementById('forn-view-form').classList.remove('hidden');
-}
-
-function hideFornecedorForm() {
-  document.getElementById('forn-view-form').classList.add('hidden');
-  document.getElementById('forn-view-consulta').classList.remove('hidden');
-}
-
-function salvarFornecedor() {
-  var data = collectFormData('forn-form');
-  if (editingFornecedor) {
-    callServer('editarFornecedor', editingFornecedor, data).then(function(result) {
-      showToast(result.message, result.success ? 'success' : 'error');
-      if (result.success) { hideFornecedorForm(); buscarFornecedores(); }
-    });
-  } else {
-    callServer('criarFornecedor', data).then(function(result) {
-      showToast(result.message, result.success ? 'success' : 'error');
-      if (result.success) { hideFornecedorForm(); buscarFornecedores(); }
-    });
-  }
-}
-
-function editarForn(cnpjCpf) {
-  callServer('consultarFornecedorPorCnpj', cnpjCpf).then(function(result) {
-    if (!result.success) { showToast(result.message, 'error'); return; }
-    editingFornecedor = cnpjCpf;
-    document.getElementById('forn-form-title').textContent = 'Editar Fornecedor';
-    document.getElementById('forn-original-doc').value = cnpjCpf;
-    document.getElementById('forn-doc').disabled = true;
-    fillFormData('forn-form', result.data);
-    document.getElementById('forn-view-consulta').classList.add('hidden');
-    document.getElementById('forn-view-form').classList.remove('hidden');
-  });
-}
-</script>
-`;
+  return createTemplateFromEmbedded_('Panel_Fornecedores').getContent();
 }
 
 /**
@@ -3836,142 +4493,7 @@ function editarForn(cnpjCpf) {
  * @returns {string}
  */
 function getPanelEtapas() {
-  return `<!-- Painel de Etapas (Timeline) -->
-<div class="card">
-  <div class="card-title" id="etapas-title">Etapas do Processo</div>
-  <p class="text-small text-muted" id="etapas-subtitle"></p>
-</div>
-<div id="etapas-timeline"></div>
-<div class="btn-group mt-8">
-  <button class="btn btn-secondary btn-sm" onclick="navigateTo('processos')">Voltar para Processos</button>
-</div>
-
-<script>
-var currentProcessoId = null;
-
-function initEtapasPanel(params) {
-  if (params && params.processoId) {
-    currentProcessoId = params.processoId;
-    document.getElementById('etapas-title').textContent = 'Etapas — ' + params.processoId;
-    carregarEtapas(params.processoId);
-  } else {
-    document.getElementById('etapas-timeline').innerHTML =
-      '<div class="card text-center"><p class="text-muted">Selecione um processo para ver as etapas.</p></div>';
-  }
-}
-
-function carregarEtapas(processoId) {
-  callServer('consultarEtapas', processoId).then(function(result) {
-    if (!result.success) { showToast(result.message, 'error'); return; }
-    renderTimeline(result.data);
-  });
-}
-
-function renderTimeline(etapas) {
-  var container = document.getElementById('etapas-timeline');
-
-  if (etapas.length === 0) {
-    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhuma etapa encontrada.</p></div>';
-    return;
-  }
-
-  var html = '<ul class="timeline">';
-
-  etapas.forEach(function(e) {
-    var itemClass = '';
-    if (e.status === 'Em Andamento') itemClass = 'active';
-    else if (e.status === 'Concluido') itemClass = 'done';
-    else if (e.status === 'N/A') itemClass = 'na';
-
-    var dataInfo = '';
-    if (e.dataInicio) {
-      var dt = e.dataInicio instanceof Date ? e.dataInicio : new Date(e.dataInicio);
-      dataInfo += 'Inicio: ' + (dt.toLocaleDateString ? dt.toLocaleDateString('pt-BR') : e.dataInicio);
-    }
-    if (e.dataConclusao) {
-      var dc = e.dataConclusao instanceof Date ? e.dataConclusao : new Date(e.dataConclusao);
-      dataInfo += ' | Conclusao: ' + (dc.toLocaleDateString ? dc.toLocaleDateString('pt-BR') : e.dataConclusao);
-    }
-    if (e.prazoLimite) {
-      var pl = e.prazoLimite instanceof Date ? e.prazoLimite : new Date(e.prazoLimite);
-      dataInfo += ' | Prazo: ' + (pl.toLocaleDateString ? pl.toLocaleDateString('pt-BR') : e.prazoLimite);
-    }
-
-    html += '<li class="timeline-item ' + itemClass + '">'
-      + '<div class="tl-title">' + e.num + '. ' + e.etapa + '</div>'
-      + '<div class="tl-meta">'
-      + statusBadge(e.status) + ' | Resp: ' + e.responsavel
-      + '</div>';
-
-    if (dataInfo) {
-      html += '<div class="tl-meta">' + dataInfo + '</div>';
-    }
-
-    if (e.documentoRef) {
-      html += '<div class="tl-meta">Doc: ' + e.documentoRef + '</div>';
-    }
-
-    if (e.observacoes) {
-      html += '<div class="tl-meta">Obs: ' + e.observacoes + '</div>';
-    }
-
-    // Botão de concluir etapa (apenas para etapas Em Andamento)
-    if (e.status === 'Em Andamento') {
-      html += '<div class="mt-8">'
-        + '<button class="btn btn-success btn-sm" onclick="concluirEtapaUI(' + e.num + ')">Concluir Etapa</button> '
-        + '<button class="btn btn-secondary btn-sm" onclick="editarEtapaUI(' + e.num + ')">Editar</button>'
-        + '</div>';
-    }
-
-    html += '</li>';
-  });
-
-  html += '</ul>';
-  container.innerHTML = html;
-}
-
-function concluirEtapaUI(etapaNum) {
-  if (!currentProcessoId) return;
-
-  callServer('concluirEtapa', currentProcessoId, etapaNum).then(function(result) {
-    showToast(result.message, result.success ? 'success' : 'error');
-    if (result.success) {
-      carregarEtapas(currentProcessoId);
-    }
-  });
-}
-
-function editarEtapaUI(etapaNum) {
-  if (!currentProcessoId) return;
-
-  var prazo = prompt('Prazo Limite (dd/mm/aaaa):');
-  var docRef = prompt('Documento Referencia:');
-  var obs = prompt('Observacoes:');
-
-  var updates = {};
-  if (prazo) {
-    var parts = prazo.split('/');
-    if (parts.length === 3) {
-      updates.prazoLimite = new Date(parts[2], parts[1] - 1, parts[0]);
-    }
-  }
-  if (docRef) updates.documentoRef = docRef;
-  if (obs) updates.observacoes = obs;
-
-  if (Object.keys(updates).length === 0) {
-    showToast('Nenhuma alteracao informada.', 'warning');
-    return;
-  }
-
-  callServer('atualizarEtapa', currentProcessoId, etapaNum, updates).then(function(result) {
-    showToast(result.message, result.success ? 'success' : 'error');
-    if (result.success) {
-      carregarEtapas(currentProcessoId);
-    }
-  });
-}
-</script>
-`;
+  return createTemplateFromEmbedded_('Panel_Etapas').getContent();
 }
 
 /**
@@ -3979,91 +4501,7 @@ function editarEtapaUI(etapaNum) {
  * @returns {string}
  */
 function getPanelDashboard() {
-  return `<!-- Painel do Dashboard -->
-<div class="card">
-  <div class="card-title">Dashboard</div>
-  <button class="btn btn-secondary btn-sm" onclick="atualizarDashboard()">Atualizar Agora</button>
-</div>
-
-<div id="dashboard-kpis"></div>
-<div id="dashboard-tables"></div>
-
-<script>
-function initDashboardPanel() {
-  carregarDashboard();
-}
-
-function carregarDashboard() {
-  callServer('getDashboardData').then(function(result) {
-    if (!result.success) { showToast(result.message, 'error'); return; }
-    renderDashboard(result.data);
-  });
-}
-
-function renderDashboard(kpis) {
-  // KPIs em cards
-  var kpiHtml = '<div class="kpi-grid">'
-    + kpiCard(kpis.totalProcessos, 'Total Processos')
-    + kpiCard(kpis.emAndamento, 'Em Andamento')
-    + kpiCard(kpis.concluidos, 'Concluidos')
-    + kpiCard(kpis.cancelados, 'Cancelados')
-    + kpiCard(kpis.suspensos, 'Suspensos')
-    + kpiCard(kpis.mediadiasAberto, 'Media Dias Aberto')
-    + '</div>';
-  document.getElementById('dashboard-kpis').innerHTML = kpiHtml;
-
-  // Tabelas
-  var tablesHtml = '';
-
-  // Por tipo de contratação
-  var tipos = Object.keys(kpis.porTipo || {});
-  if (tipos.length > 0) {
-    tablesHtml += '<div class="card"><div class="card-title">Por Tipo de Contratacao</div>'
-      + '<table class="data-table"><thead><tr><th>Tipo</th><th>Qtd</th></tr></thead><tbody>';
-    tipos.forEach(function(t) {
-      tablesHtml += '<tr><td>' + t + '</td><td>' + kpis.porTipo[t] + '</td></tr>';
-    });
-    tablesHtml += '</tbody></table></div>';
-  }
-
-  // Por etapa atual
-  var etapas = Object.keys(kpis.porEtapaAtual || {});
-  if (etapas.length > 0) {
-    tablesHtml += '<div class="card"><div class="card-title">Por Etapa Atual (Em Andamento)</div>'
-      + '<table class="data-table"><thead><tr><th>Etapa</th><th>Qtd</th></tr></thead><tbody>';
-    etapas.forEach(function(e) {
-      tablesHtml += '<tr><td class="text-small">' + e + '</td><td>' + kpis.porEtapaAtual[e] + '</td></tr>';
-    });
-    tablesHtml += '</tbody></table></div>';
-  }
-
-  // Volume mensal
-  var meses = Object.keys(kpis.volumeMensal || {}).sort();
-  if (meses.length > 0) {
-    tablesHtml += '<div class="card"><div class="card-title">Volume Mensal</div>'
-      + '<table class="data-table"><thead><tr><th>Mes/Ano</th><th>Qtd</th></tr></thead><tbody>';
-    meses.forEach(function(m) {
-      tablesHtml += '<tr><td>' + m + '</td><td>' + kpis.volumeMensal[m] + '</td></tr>';
-    });
-    tablesHtml += '</tbody></table></div>';
-  }
-
-  document.getElementById('dashboard-tables').innerHTML = tablesHtml;
-}
-
-function kpiCard(value, label) {
-  return '<div class="kpi-card"><div class="kpi-value">' + value + '</div>'
-    + '<div class="kpi-label">' + label + '</div></div>';
-}
-
-function atualizarDashboard() {
-  callServer('refreshDashboard').then(function(result) {
-    showToast(result.message, result.success ? 'success' : 'error');
-    if (result.success) carregarDashboard();
-  });
-}
-</script>
-`;
+  return createTemplateFromEmbedded_('Panel_Dashboard').getContent();
 }
 
 /**
@@ -4071,229 +4509,14 @@ function atualizarDashboard() {
  * @returns {string}
  */
 function getPanelAlertas() {
-  return `<!-- Painel de Alertas -->
-<div class="card">
-  <div class="card-title">Alertas Ativos</div>
-  <button class="btn btn-secondary btn-sm" onclick="carregarAlertas()">Atualizar</button>
-</div>
-<div id="alertas-list"></div>
-
-<div class="card mt-12">
-  <div class="card-title">Configuracao de Alertas</div>
-  <form id="alertas-config-form">
-    <div class="form-group">
-      <label>Destinatarios (emails separados por virgula)</label>
-      <textarea name="recipients" id="alert-recipients" rows="2"></textarea>
-    </div>
-    <div class="form-group">
-      <label>Dias antes do vencimento para alertar</label>
-      <input type="number" name="overdueWarningDays" id="alert-warning-days" min="1" value="3">
-    </div>
-    <div class="form-group">
-      <label>Dias sem movimentacao (processo parado)</label>
-      <input type="number" name="staleDays" id="alert-stale-days" min="1" value="15">
-    </div>
-    <div class="form-group">
-      <label>Dias antes do vencimento de credenciamento</label>
-      <input type="number" name="credentialWarningDays" id="alert-cred-days" min="1" value="30">
-    </div>
-    <div class="btn-group">
-      <button type="button" class="btn btn-primary btn-sm" onclick="salvarConfigAlerta()">Salvar Configuracao</button>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="executarAlertasManual()">Executar Alertas Agora</button>
-    </div>
-  </form>
-</div>
-
-<script>
-function initAlertasPanel() {
-  carregarAlertas();
-  carregarConfigAlertas();
-}
-
-function carregarAlertas() {
-  callServer('getAlertasAtivos').then(function(result) {
-    if (!result.success) { showToast(result.message, 'error'); return; }
-    renderAlertas(result.data);
-  });
-}
-
-function renderAlertas(alertas) {
-  var container = document.getElementById('alertas-list');
-  if (alertas.length === 0) {
-    container.innerHTML = '<div class="card text-center"><p class="text-muted text-small">Nenhum alerta ativo.</p></div>';
-    return;
-  }
-
-  var html = '';
-  alertas.forEach(function(a) {
-    var isWarning = a.alerta.indexOf('PROXIMO') !== -1 || a.alerta.indexOf('VENCENDO') !== -1;
-    html += '<div class="alert-item' + (isWarning ? ' warning' : '') + '">'
-      + '<strong>' + a.processo + '</strong> — ' + (a.descricao || '') + '<br>'
-      + '<span class="text-small">' + a.alerta + '</span>'
-      + '</div>';
-  });
-  container.innerHTML = html;
-}
-
-function carregarConfigAlertas() {
-  callServer('getConfigAlertas').then(function(config) {
-    document.getElementById('alert-recipients').value = config.recipients || '';
-    document.getElementById('alert-warning-days').value = config.thresholds.overdueWarningDays || 3;
-    document.getElementById('alert-stale-days').value = config.thresholds.staleDays || 15;
-    document.getElementById('alert-cred-days').value = config.thresholds.credentialWarningDays || 30;
-  });
-}
-
-function salvarConfigAlerta() {
-  var config = {
-    recipients: document.getElementById('alert-recipients').value,
-    thresholds: {
-      overdueWarningDays: parseInt(document.getElementById('alert-warning-days').value, 10),
-      staleDays: parseInt(document.getElementById('alert-stale-days').value, 10),
-      credentialWarningDays: parseInt(document.getElementById('alert-cred-days').value, 10)
-    }
-  };
-
-  callServer('salvarConfigAlertas', config).then(function(result) {
-    showToast(result.message, result.success ? 'success' : 'error');
-  });
-}
-
-function executarAlertasManual() {
-  callServer('executarAlertasDiarios').then(function() {
-    showToast('Alertas executados com sucesso.', 'success');
-    carregarAlertas();
-  }).catch(function() {
-    showToast('Erro ao executar alertas.', 'error');
-  });
-}
-</script>
-`;
+  return createTemplateFromEmbedded_('Panel_Alertas').getContent();
 }
 
 /**
- * Retorna HTML do painel de configuracao.
+ * Retorna HTML do painel de configuração.
  * @returns {string}
  */
 function getPanelConfig() {
-  return `<!-- Painel de Configuracao -->
-<div class="card">
-  <div class="card-title">Configuracao do Sistema</div>
-  <p class="text-small text-muted">Workflow DINT / FGV v2.0</p>
-</div>
-
-<div class="card">
-  <div class="card-title">Normativos Implementados</div>
-  <ul id="normativos-list" style="padding-left:16px;font-size:12px;"></ul>
-</div>
-
-<div class="card">
-  <div class="card-title">Triggers Automaticos</div>
-  <p class="text-small text-muted mb-8">
-    Instale os triggers para ativar alertas diarios, relatorios semanais
-    e atualizacao automatica do dashboard.
-  </p>
-  <div class="btn-group">
-    <button class="btn btn-primary btn-sm" onclick="instalarTriggers()">Instalar Triggers</button>
-    <button class="btn btn-danger btn-sm" onclick="removerTriggers()">Remover Triggers</button>
-  </div>
-</div>
-
-<div class="card">
-  <div class="card-title">Acoes do Sistema</div>
-  <div class="btn-group" style="flex-wrap:wrap;">
-    <button class="btn btn-secondary btn-sm" onclick="atualizarDashboardConfig()">Atualizar Dashboard</button>
-    <button class="btn btn-secondary btn-sm" onclick="executarAlertasConfig()">Executar Alertas</button>
-  </div>
-</div>
-
-<div class="card">
-  <div class="card-title">Log de Acoes</div>
-  <div class="form-group">
-    <select id="log-filter-acao" style="padding:6px;font-size:12px;">
-      <option value="">Todas as acoes</option>
-      <option value="CRIAR_PROCESSO">Criar Processo</option>
-      <option value="EDITAR_PROCESSO">Editar Processo</option>
-      <option value="CANCELAR_PROCESSO">Cancelar Processo</option>
-      <option value="CONCLUIR_ETAPA">Concluir Etapa</option>
-      <option value="CRIAR_FORNECEDOR">Criar Fornecedor</option>
-      <option value="ERROR">Erros</option>
-      <option value="LOCK_FAILURE">Falhas de Lock</option>
-    </select>
-  </div>
-  <button class="btn btn-secondary btn-sm mb-8" onclick="consultarLogConfig()">Consultar Log</button>
-  <div id="log-results"></div>
-</div>
-
-<script>
-function initConfigPanel() {
-  // Listar normativos
-  var normativos = ['NP AC.03.004', 'NP AC.03.006', 'NP AC.03.002', 'NP AF.03.003', 'Portaria 24/2024'];
-  var list = document.getElementById('normativos-list');
-  normativos.forEach(function(n) {
-    list.innerHTML += '<li>' + n + '</li>';
-  });
+  return createTemplateFromEmbedded_('Panel_Config').getContent();
 }
 
-function instalarTriggers() {
-  callServer('installTriggers').then(function() {
-    showToast('Triggers instalados com sucesso.', 'success');
-  });
-}
-
-function removerTriggers() {
-  callServer('removeTriggers').then(function() {
-    showToast('Triggers removidos.', 'success');
-  });
-}
-
-function atualizarDashboardConfig() {
-  callServer('refreshDashboard').then(function(result) {
-    showToast(result.message, result.success ? 'success' : 'error');
-  });
-}
-
-function executarAlertasConfig() {
-  callServer('executarAlertasDiarios').then(function() {
-    showToast('Alertas executados.', 'success');
-  });
-}
-
-function consultarLogConfig() {
-  var acao = document.getElementById('log-filter-acao').value;
-  var filters = {};
-  if (acao) filters.acao = acao;
-  filters.limite = 50;
-
-  callServer('consultarLog', filters).then(function(result) {
-    if (!result.success) { showToast(result.message, 'error'); return; }
-    renderLog(result.data);
-  });
-}
-
-function renderLog(entries) {
-  var container = document.getElementById('log-results');
-  if (entries.length === 0) {
-    container.innerHTML = '<p class="text-muted text-small">Nenhum registro encontrado.</p>';
-    return;
-  }
-
-  var html = '<table class="data-table"><thead><tr>'
-    + '<th>Data/Hora</th><th>Usuario</th><th>Acao</th><th>Detalhes</th>'
-    + '</tr></thead><tbody>';
-
-  entries.forEach(function(e) {
-    html += '<tr>'
-      + '<td class="text-small">' + e.dataHora + '</td>'
-      + '<td class="text-small">' + e.usuario + '</td>'
-      + '<td class="text-small">' + e.acao + '</td>'
-      + '<td class="text-small">' + (e.detalhes || '').substring(0, 60) + '</td>'
-      + '</tr>';
-  });
-
-  html += '</tbody></table>';
-  container.innerHTML = html;
-}
-</script>
-`;
-}
