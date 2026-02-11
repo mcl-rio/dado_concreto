@@ -1,0 +1,4299 @@
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — ARQUIVO CONSOLIDADO
+ * ============================================================
+ * INSTRUCOES DE INSTALACAO:
+ * 1. Abra a planilha Workflow Dint no Google Sheets
+ * 2. Va em Extensoes > Apps Script
+ * 3. Delete todos os arquivos existentes
+ * 4. Crie um novo arquivo chamado "Code.gs"
+ * 5. Cole TODO o conteudo deste arquivo no Code.gs
+ * 6. Salve (Ctrl+S)
+ * 7. Recarregue a planilha
+ * 8. O menu "Workflow DINT v2.0" aparecera
+ *
+ * IMPORTANTE: Nao e necessario criar arquivos .html separados.
+ * Todo o HTML esta embutido como strings neste arquivo.
+ * ============================================================
+ */
+
+// ╔════════════════════════════════════════════════════════════╗
+// ║  PARTE 1: CODIGO SERVER-SIDE (de all_gs_code.gs)         ║
+// ╚════════════════════════════════════════════════════════════╝
+
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Configuração Central
+ * ============================================================
+ * Constantes, nomes de abas, índices de colunas e enumerações.
+ * Nenhuma lógica de negócio — apenas dados de referência.
+ * ============================================================
+ */
+
+// ── Nomes das abas ──────────────────────────────────────────
+var SHEET = {
+  HOME:          'HOME',
+  PROCESSOS:     'Processos',
+  FORNECEDORES:  'Fornecedores',
+  ETAPAS:        'Etapas',
+  DASHBOARD:     'Dashboard',
+  LOG:           'Log'
+};
+
+// ── Colunas da aba Processos (1-based) ──────────────────────
+var COL_PROC = {
+  ID:                     1,
+  STATUS_GERAL:           2,
+  ETAPA_ATUAL:            3,
+  DESCRICAO:              4,
+  TIPO_CONTRATACAO:       5,
+  NATUREZA_TERCEIRO:      6,
+  NATUREZA_CONTRATACAO:   7,
+  FORMA_CONTRATACAO:      8,
+  VALOR_ESTIMADO:         9,
+  FORNECEDOR:            10,
+  CNPJ_CPF:              11,
+  CENTRO_CUSTO:          12,
+  REQUISITANTE:          13,
+  DATA_ABERTURA:         14,
+  PRAZO_PREVISTO:        15,
+  ESTRUTURA:             16,
+  COLETA_PRECOS:         17,
+  PROPOSTA:              18,
+  CREDENCIAMENTO:        19,
+  COMPLIANCE:            20,
+  CONTRATO:              21,
+  OBSERVACOES:           22,
+  DIAS_ABERTO:           23,
+  ALERTAS:               24
+};
+
+// ── Colunas da aba Fornecedores (1-based) ───────────────────
+var COL_FORN = {
+  CNPJ_CPF:                1,
+  RAZAO_SOCIAL:            2,
+  TIPO:                    3,
+  STATUS_CADASTRO:         4,
+  VALIDADE_CADASTRO:       5,
+  STATUS_CREDENCIAMENTO:   6,
+  VALIDADE_CREDENCIAMENTO: 7,
+  CONTATO:                 8,
+  EMAIL:                   9,
+  TELEFONE:               10,
+  DADOS_BANCARIOS:        11,
+  OBSERVACOES:            12
+};
+
+// ── Colunas da aba Etapas (1-based) ─────────────────────────
+var COL_ETAPA = {
+  ID_PROCESSO:     1,
+  NUM:             2,
+  ETAPA:           3,
+  RESPONSAVEL:     4,
+  STATUS:          5,
+  DATA_INICIO:     6,
+  DATA_CONCLUSAO:  7,
+  PRAZO_LIMITE:    8,
+  DOCUMENTO_REF:   9,
+  OBSERVACOES:    10
+};
+
+// ── Colunas da aba Log (1-based) ────────────────────────────
+var COL_LOG = {
+  DATA_HORA:  1,
+  USUARIO:    2,
+  ACAO:       3,
+  DETALHES:   4
+};
+
+// ── Status possíveis ────────────────────────────────────────
+var STATUS = {
+  EM_ANDAMENTO:   'Em Andamento',
+  CONCLUIDO:      'Concluido',
+  CANCELADO:      'Cancelado',
+  SUSPENSO:       'Suspenso',
+  PENDENTE:       'Pendente',
+  NAO_APLICAVEL:  'N/A'
+};
+
+// ── Definição das 23 etapas do ciclo de contratação ─────────
+var STAGES = [
+  { num:  1, name: 'Identificacao da Necessidade',       responsible: 'DINT' },
+  { num:  2, name: 'Verificacao Catalogo (INV)',          responsible: 'DINT' },
+  { num:  3, name: 'Cadastro do Terceiro (Portal)',       responsible: 'DINT' },
+  { num:  4, name: 'Credenciamento do Terceiro',          responsible: 'DINT' },
+  { num:  5, name: 'Due Diligence (DCI)',                 responsible: 'DCI' },
+  { num:  6, name: 'Coleta de Precos',                    responsible: 'DINT' },
+  { num:  7, name: 'Mapa de Cotacao',                     responsible: 'DINT' },
+  { num:  8, name: 'Proposta Comercial',                  responsible: 'DINT' },
+  { num:  9, name: 'Instrumento Contratual',              responsible: 'DINT' },
+  { num: 10, name: 'Assinatura Contrato (D4Sign)',        responsible: 'DINT' },
+  { num: 11, name: 'Arquivamento (NDoc)',                 responsible: 'DINT' },
+  { num: 12, name: 'Requisicao de Compra (RC)',           responsible: 'DINT' },
+  { num: 13, name: 'Distribuicao (DO Compras)',           responsible: 'DO Compras' },
+  { num: 14, name: 'Ordem de Compra (OC)',                responsible: 'DO Compras' },
+  { num: 15, name: 'Aprovacao OC (AME)',                  responsible: 'DINT' },
+  { num: 16, name: 'Envio ao Fornecedor',                 responsible: 'DO Compras' },
+  { num: 17, name: 'Execucao (Entrega/Servico)',          responsible: 'Fornecedor' },
+  { num: 18, name: 'Emissao NF-e',                        responsible: 'Fornecedor' },
+  { num: 19, name: 'Verificacao NF-e (Contabilidade)',    responsible: 'Contabilidade' },
+  { num: 20, name: 'Liberacao Pagamento (SACEPE)',        responsible: 'DINT' },
+  { num: 21, name: 'Ateste via D4Sign',                   responsible: 'DINT' },
+  { num: 22, name: 'Validacao Contas a Pagar',            responsible: 'Contas a Pagar' },
+  { num: 23, name: 'Pagamento Efetuado',                  responsible: 'Contas a Pagar' }
+];
+
+// ── Mapeamento de flags de exigência para etapas ────────────
+var FLAG_TO_STAGE = {
+  coletaPrecos:    [6],
+  proposta:        [8],
+  credenciamento:  [4],
+  compliance:      [5],
+  contrato:        [9, 10]
+};
+
+// ── Tipos e naturezas (enums de formulário) ─────────────────
+var TIPOS_CONTRATACAO = [
+  'Compra Direta',
+  'Licitacao',
+  'Dispensa de Licitacao',
+  'Inexigibilidade'
+];
+
+var NATUREZAS_TERCEIRO = [
+  'Pessoa Juridica',
+  'Pessoa Fisica',
+  'Organismo Internacional'
+];
+
+var NATUREZAS_CONTRATACAO = [
+  'Servico',
+  'Material',
+  'Obra',
+  'Consultoria',
+  'Locacao'
+];
+
+var FORMAS_CONTRATACAO = [
+  'Contrato',
+  'Ordem de Servico',
+  'Nota de Empenho',
+  'Carta Acordo'
+];
+
+// ── Configuração de Lock ────────────────────────────────────
+var CONFIG_LOCK = {
+  TIMEOUT_MS:     30000,   // 30s max por tentativa
+  RETRY_COUNT:    3,       // até 3 tentativas
+  RETRY_BASE_MS:  1000     // 1s backoff base
+};
+
+// ── Thresholds de regras normativas (ajustáveis) ────────────
+var THRESHOLDS = {
+  COLETA_PRECOS_VALOR:   17600,    // R$ 17.600
+  PROPOSTA_VALOR:        50000,    // R$ 50.000
+  COMPLIANCE_VALOR:      50000,    // R$ 50.000
+  CONTRATO_VALOR:        100000    // R$ 100.000
+};
+
+// ── Thresholds de alertas ───────────────────────────────────
+var ALERT_DEFAULTS = {
+  OVERDUE_WARNING_DAYS:     3,
+  STALE_DAYS:              15,
+  CREDENTIAL_WARNING_DAYS: 30
+};
+
+// ── Normativos implementados ────────────────────────────────
+var NORMATIVES = [
+  'NP AC.03.004',
+  'NP AC.03.006',
+  'NP AC.03.002',
+  'NP AF.03.003',
+  'Portaria 24/2024'
+];
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Utilitários
+ * ============================================================
+ * Validações, formatação, include() para HTML,
+ * helpers de PropertiesService.
+ * ============================================================
+ */
+
+// ── HTML Template Include ───────────────────────────────────
+
+/**
+ * Inclui o conteúdo de um arquivo HTML em um template.
+ * Uso em HTML: <?!= include('Sidebar_CSS') ?>
+ * @param {string} filename - Nome do arquivo (sem .html)
+ * @returns {string}
+ */
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+// ── Validação de CNPJ ───────────────────────────────────────
+
+/**
+ * Valida um CNPJ (14 dígitos) com cálculo dos dígitos verificadores.
+ * @param {string} cnpj
+ * @returns {boolean}
+ */
+function validateCNPJ(cnpj) {
+  cnpj = String(cnpj).replace(/[^\d]/g, '');
+  if (cnpj.length !== 14) return false;
+
+  // Rejeita CNPJs com todos os dígitos iguais
+  if (/^(\d)\1{13}$/.test(cnpj)) return false;
+
+  var tamanho = cnpj.length - 2;
+  var numeros = cnpj.substring(0, tamanho);
+  var digitos = cnpj.substring(tamanho);
+  var soma = 0;
+  var pos = tamanho - 7;
+
+  for (var i = tamanho; i >= 1; i--) {
+    soma += parseInt(numeros.charAt(tamanho - i), 10) * pos--;
+    if (pos < 2) pos = 9;
+  }
+
+  var resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+  if (resultado !== parseInt(digitos.charAt(0), 10)) return false;
+
+  tamanho = tamanho + 1;
+  numeros = cnpj.substring(0, tamanho);
+  soma = 0;
+  pos = tamanho - 7;
+
+  for (var j = tamanho; j >= 1; j--) {
+    soma += parseInt(numeros.charAt(tamanho - j), 10) * pos--;
+    if (pos < 2) pos = 9;
+  }
+
+  resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+  return resultado === parseInt(digitos.charAt(1), 10);
+}
+
+// ── Validação de CPF ────────────────────────────────────────
+
+/**
+ * Valida um CPF (11 dígitos) com cálculo dos dígitos verificadores.
+ * @param {string} cpf
+ * @returns {boolean}
+ */
+function validateCPF(cpf) {
+  cpf = String(cpf).replace(/[^\d]/g, '');
+  if (cpf.length !== 11) return false;
+
+  // Rejeita CPFs com todos os dígitos iguais
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+
+  var soma = 0;
+  for (var i = 0; i < 9; i++) {
+    soma += parseInt(cpf.charAt(i), 10) * (10 - i);
+  }
+  var resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  if (resto !== parseInt(cpf.charAt(9), 10)) return false;
+
+  soma = 0;
+  for (var j = 0; j < 10; j++) {
+    soma += parseInt(cpf.charAt(j), 10) * (11 - j);
+  }
+  resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  return resto === parseInt(cpf.charAt(10), 10);
+}
+
+/**
+ * Valida CNPJ ou CPF automaticamente pelo tamanho.
+ * @param {string} doc
+ * @returns {boolean}
+ */
+function validateCNPJorCPF(doc) {
+  var digits = String(doc).replace(/[^\d]/g, '');
+  if (digits.length === 14) return validateCNPJ(digits);
+  if (digits.length === 11) return validateCPF(digits);
+  return false;
+}
+
+// ── Validação de campos obrigatórios ────────────────────────
+
+/**
+ * Verifica campos obrigatórios em um objeto de formulário.
+ * @param {Object} formData
+ * @param {Array<string>} requiredFields - nomes dos campos
+ * @returns {{valid: boolean, missing: Array<string>}}
+ */
+function validateRequired(formData, requiredFields) {
+  var missing = [];
+  requiredFields.forEach(function(field) {
+    var val = formData[field];
+    if (val === undefined || val === null || String(val).trim() === '') {
+      missing.push(field);
+    }
+  });
+  return { valid: missing.length === 0, missing: missing };
+}
+
+/**
+ * Verifica se um valor é um número positivo.
+ * @param {*} value
+ * @returns {boolean}
+ */
+function isPositiveNumber(value) {
+  var num = parseFloat(value);
+  return !isNaN(num) && num > 0;
+}
+
+// ── Formatação ──────────────────────────────────────────────
+
+/**
+ * Formata data como dd/MM/yyyy.
+ * @param {Date} date
+ * @returns {string}
+ */
+function formatDateBR(date) {
+  if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
+  return Utilities.formatDate(date, 'America/Sao_Paulo', 'dd/MM/yyyy');
+}
+
+/**
+ * Formata data e hora como dd/MM/yyyy HH:mm:ss.
+ * @param {Date} date
+ * @returns {string}
+ */
+function formatDateTimeBR(date) {
+  if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
+  return Utilities.formatDate(date, 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm:ss');
+}
+
+/**
+ * Formata valor como moeda brasileira: R$ X.XXX,XX
+ * @param {number} value
+ * @returns {string}
+ */
+function formatCurrency(value) {
+  var num = parseFloat(value);
+  if (isNaN(num)) return 'R$ 0,00';
+  return 'R$ ' + num.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+/**
+ * Normaliza string: trim e colapsa espaços múltiplos.
+ * @param {string} str
+ * @returns {string}
+ */
+function normalizeString(str) {
+  if (!str) return '';
+  return String(str).trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * Formata CNPJ com máscara: XX.XXX.XXX/XXXX-XX
+ * @param {string} cnpj - apenas dígitos
+ * @returns {string}
+ */
+function formatCNPJ(cnpj) {
+  var d = String(cnpj).replace(/[^\d]/g, '');
+  if (d.length !== 14) return cnpj;
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+}
+
+/**
+ * Formata CPF com máscara: XXX.XXX.XXX-XX
+ * @param {string} cpf - apenas dígitos
+ * @returns {string}
+ */
+function formatCPF(cpf) {
+  var d = String(cpf).replace(/[^\d]/g, '');
+  if (d.length !== 11) return cpf;
+  return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+}
+
+// ── PropertiesService Helpers ───────────────────────────────
+
+/**
+ * Armazena estado por usuário (UserProperties).
+ * @param {string} key
+ * @param {string} value
+ */
+function setUserState(key, value) {
+  PropertiesService.getUserProperties().setProperty(key, value);
+}
+
+/**
+ * Recupera estado por usuário.
+ * @param {string} key
+ * @returns {string|null}
+ */
+function getUserState(key) {
+  return PropertiesService.getUserProperties().getProperty(key);
+}
+
+/**
+ * Lê configuração do sistema (ScriptProperties).
+ * @param {string} key
+ * @returns {string|null}
+ */
+function getScriptConfig(key) {
+  return PropertiesService.getScriptProperties().getProperty(key);
+}
+
+/**
+ * Grava configuração do sistema.
+ * @param {string} key
+ * @param {string} value
+ */
+function setScriptConfig(key, value) {
+  PropertiesService.getScriptProperties().setProperty(key, value);
+}
+
+/**
+ * Calcula a diferença em dias entre duas datas (ignora hora).
+ * @param {Date} dateA
+ * @param {Date} dateB
+ * @returns {number} diferença em dias (pode ser negativo)
+ */
+function diffDays(dateA, dateB) {
+  var a = new Date(dateA.getFullYear(), dateA.getMonth(), dateA.getDate());
+  var b = new Date(dateB.getFullYear(), dateB.getMonth(), dateB.getDate());
+  return Math.round((a - b) / (1000 * 60 * 60 * 24));
+}
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Registro de Auditoria (Log)
+ * ============================================================
+ * Grava ações na aba Log com timestamp, usuário, ação e detalhes.
+ * logAction() NUNCA lança exceção — falhas são silenciosas.
+ * ============================================================
+ */
+
+/**
+ * Registra uma ação na aba Log.
+ *
+ * @param {string} action  - Identificador da ação (ex: 'CRIAR_PROCESSO', 'ERROR')
+ * @param {string} details - Texto livre com detalhes
+ */
+function logAction(action, details) {
+  try {
+    var user;
+    try {
+      user = Session.getActiveUser().getEmail();
+    } catch (e) {
+      user = 'Sistema';
+    }
+    if (!user) user = 'Sistema';
+
+    var timestamp = new Date();
+    var row = [
+      formatDateTimeBR(timestamp),
+      user,
+      String(action),
+      String(details || '')
+    ];
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET.LOG);
+    if (sheet) {
+      sheet.appendRow(row);
+    }
+  } catch (e) {
+    // Log NUNCA lança exceção. Falha silenciosa com log no Stackdriver.
+    console.error('logAction falhou: ' + e.message);
+  }
+}
+
+/**
+ * Consulta entradas do log com filtros opcionais.
+ * Operação de leitura — sem lock.
+ *
+ * @param {Object} [filters] - Filtros opcionais
+ * @param {string} [filters.acao]      - Filtrar por ação
+ * @param {string} [filters.usuario]   - Filtrar por usuário
+ * @param {Date}   [filters.dataInicio] - Data início
+ * @param {Date}   [filters.dataFim]    - Data fim
+ * @param {number} [filters.limite]     - Máximo de registros (default 100)
+ * @returns {{success: boolean, data: Array<Object>, message: string}}
+ */
+function consultarLog(filters) {
+  try {
+    filters = filters || {};
+    var limite = filters.limite || 100;
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET.LOG);
+    if (!sheet || sheet.getLastRow() < 2) {
+      return { success: true, data: [], message: 'Nenhum registro encontrado.' };
+    }
+
+    var allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
+    var results = [];
+
+    for (var i = allData.length - 1; i >= 0 && results.length < limite; i--) {
+      var row = allData[i];
+      var dataHora = row[0];
+      var usuario = String(row[1]);
+      var acao = String(row[2]);
+      var detalhes = String(row[3]);
+
+      // Aplicar filtros
+      if (filters.acao && acao !== filters.acao) continue;
+      if (filters.usuario && usuario.indexOf(filters.usuario) === -1) continue;
+
+      if (filters.dataInicio || filters.dataFim) {
+        var logDate;
+        if (dataHora instanceof Date) {
+          logDate = dataHora;
+        } else {
+          // Parse dd/MM/yyyy HH:mm:ss
+          var parts = String(dataHora).split(' ');
+          var dateParts = parts[0].split('/');
+          logDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0]);
+        }
+
+        if (filters.dataInicio && logDate < filters.dataInicio) continue;
+        if (filters.dataFim && logDate > filters.dataFim) continue;
+      }
+
+      results.push({
+        dataHora: dataHora,
+        usuario: usuario,
+        acao: acao,
+        detalhes: detalhes
+      });
+    }
+
+    return {
+      success: true,
+      data: results,
+      message: results.length + ' registro(s) encontrado(s).'
+    };
+  } catch (e) {
+    return { success: false, data: [], message: 'Erro ao consultar log: ' + e.message };
+  }
+}
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Controle de Concorrência
+ * ============================================================
+ * Wrapper para LockService.getDocumentLock() com retry
+ * e exponential backoff. TODA operação de escrita no sistema
+ * deve usar withDocumentLock().
+ * ============================================================
+ */
+
+/**
+ * Executa uma função callback sob lock de documento com retry e backoff.
+ *
+ * - Adquire LockService.getDocumentLock() com timeout configurável
+ * - Até CONFIG_LOCK.RETRY_COUNT tentativas com exponential backoff
+ * - Chama SpreadsheetApp.flush() antes de liberar o lock
+ * - Loga falhas de lock para auditoria
+ *
+ * @param {Function} callback       - Função a executar enquanto segura o lock.
+ *                                    Pode retornar qualquer valor.
+ * @param {string}   operationName  - Nome da operação (para log e mensagem de erro).
+ * @returns {*} O valor retornado pelo callback.
+ * @throws {Error} Se o lock não puder ser adquirido após todas as tentativas,
+ *                 ou se o callback lançar exceção.
+ */
+function withDocumentLock(callback, operationName) {
+  var lock = LockService.getDocumentLock();
+  var acquired = false;
+  var lastError = null;
+
+  for (var attempt = 0; attempt < CONFIG_LOCK.RETRY_COUNT; attempt++) {
+    try {
+      acquired = lock.tryLock(CONFIG_LOCK.TIMEOUT_MS);
+      if (acquired) break;
+    } catch (e) {
+      lastError = e;
+    }
+
+    // Exponential backoff: 1s, 2s, 4s ...
+    if (attempt < CONFIG_LOCK.RETRY_COUNT - 1) {
+      var backoffMs = CONFIG_LOCK.RETRY_BASE_MS * Math.pow(2, attempt);
+      Utilities.sleep(backoffMs);
+    }
+  }
+
+  if (!acquired) {
+    logAction('LOCK_FAILURE', operationName + ' - nao foi possivel adquirir lock apos '
+              + CONFIG_LOCK.RETRY_COUNT + ' tentativa(s)'
+              + (lastError ? ' | Erro: ' + lastError.message : ''));
+    throw new Error('O sistema esta ocupado. Por favor, tente novamente em alguns segundos. ('
+                    + operationName + ')');
+  }
+
+  try {
+    var result = callback();
+    // Garante que todas as escritas pendentes foram aplicadas ANTES de liberar o lock
+    SpreadsheetApp.flush();
+    return result;
+  } catch (e) {
+    logAction('ERROR', operationName + ': ' + e.message);
+    throw e;
+  } finally {
+    lock.releaseLock();
+  }
+}
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Camada de Acesso a Dados (DAL)
+ * ============================================================
+ * Abstrai todas as interações com SpreadsheetApp.
+ * NENHUM outro arquivo deve chamar getRange(), getValues()
+ * ou setValues() diretamente.
+ *
+ * Princípios:
+ * - Batch reads: getDataRange().getValues()
+ * - Batch writes: setValues() em uma operação
+ * - Cache de referência por invocação (GAS é stateless)
+ * ============================================================
+ */
+
+// ── Cache por invocação (resetado a cada server call) ───────
+var _ss = null;
+var _sheets = {};
+
+/**
+ * Retorna referência ao spreadsheet ativo (com cache).
+ * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet}
+ */
+function getSpreadsheet_() {
+  if (!_ss) {
+    _ss = SpreadsheetApp.getActiveSpreadsheet();
+  }
+  return _ss;
+}
+
+/**
+ * Retorna a sheet por nome (com cache).
+ * @param {string} sheetName
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet}
+ * @throws {Error} se a aba não existir
+ */
+function getSheet_(sheetName) {
+  if (!_sheets[sheetName]) {
+    var sheet = getSpreadsheet_().getSheetByName(sheetName);
+    if (!sheet) {
+      throw new Error('Aba nao encontrada: ' + sheetName);
+    }
+    _sheets[sheetName] = sheet;
+  }
+  return _sheets[sheetName];
+}
+
+// ── Namespace DAL ───────────────────────────────────────────
+var DAL = {
+
+  /**
+   * Lê todas as linhas de dados de uma aba (exclui header/linha 1).
+   * @param {string} sheetName
+   * @returns {Array<Array<any>>} Array 2D de valores
+   */
+  readAll: function(sheetName) {
+    var sheet = getSheet_(sheetName);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return [];
+    var lastCol = sheet.getLastColumn();
+    if (lastCol < 1) return [];
+    return sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  },
+
+  /**
+   * Lê a linha de cabeçalho (linha 1).
+   * @param {string} sheetName
+   * @returns {Array<string>}
+   */
+  readHeaders: function(sheetName) {
+    var sheet = getSheet_(sheetName);
+    var lastCol = sheet.getLastColumn();
+    if (lastCol < 1) return [];
+    return sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  },
+
+  /**
+   * Lê linhas que satisfazem uma função predicado.
+   * @param {string} sheetName
+   * @param {Function} predicateFn - function(row) retornando boolean
+   * @returns {Array<{rowIndex: number, data: Array<any>}>}
+   *          rowIndex é 1-based (header=1, primeiro dado=2)
+   */
+  readWhere: function(sheetName, predicateFn) {
+    var allRows = DAL.readAll(sheetName);
+    var results = [];
+    for (var i = 0; i < allRows.length; i++) {
+      if (predicateFn(allRows[i])) {
+        results.push({
+          rowIndex: i + 2,  // +2 porque: array 0-based + header na linha 1
+          data: allRows[i]
+        });
+      }
+    }
+    return results;
+  },
+
+  /**
+   * Encontra uma única linha por valor em uma coluna específica.
+   * @param {string} sheetName
+   * @param {number} colIndex - índice 1-based da coluna
+   * @param {any} value - valor a buscar
+   * @returns {{rowIndex: number, data: Array<any>}|null}
+   */
+  findRow: function(sheetName, colIndex, value) {
+    var allRows = DAL.readAll(sheetName);
+    for (var i = 0; i < allRows.length; i++) {
+      if (String(allRows[i][colIndex - 1]) === String(value)) {
+        return {
+          rowIndex: i + 2,
+          data: allRows[i]
+        };
+      }
+    }
+    return null;
+  },
+
+  /**
+   * Adiciona uma linha ao final da aba.
+   * @param {string} sheetName
+   * @param {Array<any>} rowData
+   */
+  appendRow: function(sheetName, rowData) {
+    var sheet = getSheet_(sheetName);
+    sheet.appendRow(rowData);
+  },
+
+  /**
+   * Adiciona múltiplas linhas ao final da aba em uma operação.
+   * @param {string} sheetName
+   * @param {Array<Array<any>>} rows
+   */
+  appendRows: function(sheetName, rows) {
+    if (!rows || rows.length === 0) return;
+    var sheet = getSheet_(sheetName);
+    var lastRow = sheet.getLastRow();
+    var numCols = rows[0].length;
+    sheet.getRange(lastRow + 1, 1, rows.length, numCols).setValues(rows);
+  },
+
+  /**
+   * Atualiza uma linha inteira (sobrescreve da coluna 1).
+   * @param {string} sheetName
+   * @param {number} rowIndex - índice 1-based da linha na sheet
+   * @param {Array<any>} rowData
+   */
+  updateRow: function(sheetName, rowIndex, rowData) {
+    var sheet = getSheet_(sheetName);
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  },
+
+  /**
+   * Atualiza uma célula específica.
+   * @param {string} sheetName
+   * @param {number} rowIndex - 1-based
+   * @param {number} colIndex - 1-based
+   * @param {any} value
+   */
+  updateCell: function(sheetName, rowIndex, colIndex, value) {
+    var sheet = getSheet_(sheetName);
+    sheet.getRange(rowIndex, colIndex).setValue(value);
+  },
+
+  /**
+   * Escreve um bloco 2D de dados a partir de uma posição.
+   * Usado para tabelas do Dashboard.
+   * @param {string} sheetName
+   * @param {number} startRow - 1-based
+   * @param {number} startCol - 1-based
+   * @param {Array<Array<any>>} data
+   */
+  writeBlock: function(sheetName, startRow, startCol, data) {
+    if (!data || data.length === 0) return;
+    var sheet = getSheet_(sheetName);
+    var numRows = data.length;
+    var numCols = data[0].length;
+    sheet.getRange(startRow, startCol, numRows, numCols).setValues(data);
+  },
+
+  /**
+   * Retorna o número de linhas de dados (total - header).
+   * @param {string} sheetName
+   * @returns {number}
+   */
+  countRows: function(sheetName) {
+    var sheet = getSheet_(sheetName);
+    return Math.max(0, sheet.getLastRow() - 1);
+  },
+
+  /**
+   * Limpa todas as linhas de dados (mantém o header).
+   * @param {string} sheetName
+   */
+  clearData: function(sheetName) {
+    var sheet = getSheet_(sheetName);
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.deleteRows(2, lastRow - 1);
+    }
+  }
+};
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Motor de Regras Normativas
+ * ============================================================
+ * Calcula quais exigências (flags) se aplicam a um processo
+ * com base nos normativos:
+ *   NP AC.03.004, NP AC.03.006, NP AC.03.002,
+ *   NP AF.03.003, Portaria 24/2024
+ *
+ * Função pura (sem I/O). Thresholds configuráveis em 00_Config.gs.
+ * ============================================================
+ */
+
+/**
+ * Calcula os 5 flags de exigência com base nas classificações do processo.
+ *
+ * @param {Object} params
+ * @param {string} params.tipoContratacao     - Ex: "Compra Direta", "Licitacao"
+ * @param {string} params.naturezaTerceiro    - Ex: "Pessoa Juridica", "Pessoa Fisica"
+ * @param {string} params.naturezaContratacao - Ex: "Servico", "Material", "Obra"
+ * @param {string} params.formaContratacao    - Ex: "Contrato", "Ordem de Servico"
+ * @param {number} params.valorEstimado       - Valor em BRL
+ *
+ * @returns {Object} {
+ *   coletaPrecos: boolean,
+ *   proposta: boolean,
+ *   credenciamento: boolean,
+ *   compliance: boolean,
+ *   contrato: boolean
+ * }
+ */
+function calcularRequisitos(params) {
+  var valor = parseFloat(params.valorEstimado) || 0;
+
+  var flags = {
+    coletaPrecos:    false,
+    proposta:        false,
+    credenciamento:  false,
+    compliance:      false,
+    contrato:        false
+  };
+
+  // ── Regra: Coleta de Preços (NP AC.03.004) ───────────────
+  // Obrigatória para Compra Direta com valor >= threshold
+  // Sempre obrigatória para Licitação
+  if (params.tipoContratacao === 'Compra Direta' && valor >= THRESHOLDS.COLETA_PRECOS_VALOR) {
+    flags.coletaPrecos = true;
+  }
+  if (params.tipoContratacao === 'Licitacao') {
+    flags.coletaPrecos = true;
+  }
+
+  // ── Regra: Proposta Comercial (NP AC.03.004) ─────────────
+  // Obrigatória quando forma = Contrato ou valor >= threshold
+  if (params.formaContratacao === 'Contrato' || valor >= THRESHOLDS.PROPOSTA_VALOR) {
+    flags.proposta = true;
+  }
+
+  // ── Regra: Credenciamento (NP AC.03.006) ─────────────────
+  // Obrigatório para Pessoa Jurídica
+  if (params.naturezaTerceiro === 'Pessoa Juridica') {
+    flags.credenciamento = true;
+  }
+
+  // ── Regra: Compliance / Due Diligence (NP AC.03.006) ─────
+  // Obrigatório quando valor >= threshold ou natureza = Obra
+  if (valor >= THRESHOLDS.COMPLIANCE_VALOR || params.naturezaContratacao === 'Obra') {
+    flags.compliance = true;
+  }
+
+  // ── Regra: Instrumento Contratual (NP AF.03.003) ─────────
+  // Obrigatório quando forma = Contrato ou valor >= threshold
+  if (params.formaContratacao === 'Contrato') {
+    flags.contrato = true;
+  }
+  if (valor >= THRESHOLDS.CONTRATO_VALOR) {
+    flags.contrato = true;
+  }
+
+  return flags;
+}
+
+/**
+ * Aplica os flags de requisitos nas linhas de Etapas de um processo.
+ * Etapas não obrigatórias são marcadas como "N/A".
+ * DEVE ser chamada dentro de withDocumentLock().
+ *
+ * @param {string} processoId
+ * @param {Object} flags - Saída de calcularRequisitos()
+ */
+function aplicarRequisitosEtapas_(processoId, flags) {
+  var stageRows = DAL.readWhere(SHEET.ETAPAS, function(row) {
+    return String(row[COL_ETAPA.ID_PROCESSO - 1]) === processoId;
+  });
+
+  var flagNames = Object.keys(FLAG_TO_STAGE);
+  for (var f = 0; f < flagNames.length; f++) {
+    var flagName = flagNames[f];
+    if (!flags[flagName]) {
+      // Flag não aplicável → marcar etapas correspondentes como N/A
+      var stageNums = FLAG_TO_STAGE[flagName];
+      for (var s = 0; s < stageNums.length; s++) {
+        var stageNum = stageNums[s];
+        for (var r = 0; r < stageRows.length; r++) {
+          if (stageRows[r].data[COL_ETAPA.NUM - 1] === stageNum) {
+            stageRows[r].data[COL_ETAPA.STATUS - 1] = STATUS.NAO_APLICAVEL;
+            DAL.updateRow(SHEET.ETAPAS, stageRows[r].rowIndex, stageRows[r].data);
+            break;
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Define os valores das 5 colunas de flags na linha do processo.
+ * Modifica o array in-place e retorna.
+ *
+ * @param {Array<any>} processoRow - Array representando a linha do processo
+ * @param {Object} flags - Saída de calcularRequisitos()
+ * @returns {Array<any>} O mesmo array modificado
+ */
+function setProcessFlags_(processoRow, flags) {
+  processoRow[COL_PROC.COLETA_PRECOS - 1]  = flags.coletaPrecos   ? 'Obrigatorio' : 'N/A';
+  processoRow[COL_PROC.PROPOSTA - 1]        = flags.proposta       ? 'Obrigatorio' : 'N/A';
+  processoRow[COL_PROC.CREDENCIAMENTO - 1]  = flags.credenciamento ? 'Obrigatorio' : 'N/A';
+  processoRow[COL_PROC.COMPLIANCE - 1]      = flags.compliance     ? 'Obrigatorio' : 'N/A';
+  processoRow[COL_PROC.CONTRATO - 1]        = flags.contrato       ? 'Obrigatorio' : 'N/A';
+  return processoRow;
+}
+
+/**
+ * Retorna descrição textual dos requisitos aplicáveis (para display).
+ * @param {Object} flags
+ * @returns {string}
+ */
+function descreverRequisitos(flags) {
+  var nomes = {
+    coletaPrecos:   'Coleta de Precos',
+    proposta:       'Proposta Comercial',
+    credenciamento: 'Credenciamento',
+    compliance:     'Compliance/Due Diligence',
+    contrato:       'Instrumento Contratual'
+  };
+
+  var obrigatorios = [];
+  var flagNames = Object.keys(flags);
+  for (var i = 0; i < flagNames.length; i++) {
+    if (flags[flagNames[i]]) {
+      obrigatorios.push(nomes[flagNames[i]]);
+    }
+  }
+
+  return obrigatorios.length > 0
+    ? 'Obrigatorios: ' + obrigatorios.join(', ')
+    : 'Nenhuma exigencia adicional';
+}
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Gestão de Etapas
+ * ============================================================
+ * Criação, consulta e avanço das 23 etapas do ciclo de
+ * contratação. Avanço automático e cálculo de "Dias em Aberto".
+ * ============================================================
+ */
+
+/**
+ * Cria as 23 linhas de etapas para um novo processo.
+ * DEVE ser chamada dentro de withDocumentLock().
+ *
+ * @param {string} processoId - ID do processo (ex: "DINT-2026-001")
+ */
+function criarEtapasParaProcesso_(processoId) {
+  var hoje = new Date();
+  var rows = [];
+
+  for (var i = 0; i < STAGES.length; i++) {
+    var stage = STAGES[i];
+    rows.push([
+      processoId,               // ID Processo
+      stage.num,                // Nº Etapa
+      stage.name,               // Etapa
+      stage.responsible,        // Responsável
+      STATUS.PENDENTE,          // Status (todas iniciam Pendente)
+      '',                       // Data Início
+      '',                       // Data Conclusão
+      '',                       // Prazo Limite
+      '',                       // Documento Ref.
+      ''                        // Observações
+    ]);
+  }
+
+  // Primeira etapa começa como "Em Andamento" com data de hoje
+  rows[0][COL_ETAPA.STATUS - 1]      = STATUS.EM_ANDAMENTO;
+  rows[0][COL_ETAPA.DATA_INICIO - 1] = hoje;
+
+  DAL.appendRows(SHEET.ETAPAS, rows);
+}
+
+/**
+ * Consulta todas as etapas de um processo.
+ * Operação de leitura — sem lock.
+ *
+ * @param {string} processoId
+ * @returns {{success: boolean, data: Array<Object>, message: string}}
+ */
+function consultarEtapas(processoId) {
+  try {
+    var rows = DAL.readWhere(SHEET.ETAPAS, function(row) {
+      return String(row[COL_ETAPA.ID_PROCESSO - 1]) === processoId;
+    });
+
+    var etapas = rows.map(function(r) {
+      return {
+        idProcesso:    r.data[COL_ETAPA.ID_PROCESSO - 1],
+        num:           r.data[COL_ETAPA.NUM - 1],
+        etapa:         r.data[COL_ETAPA.ETAPA - 1],
+        responsavel:   r.data[COL_ETAPA.RESPONSAVEL - 1],
+        status:        r.data[COL_ETAPA.STATUS - 1],
+        dataInicio:    r.data[COL_ETAPA.DATA_INICIO - 1],
+        dataConclusao: r.data[COL_ETAPA.DATA_CONCLUSAO - 1],
+        prazoLimite:   r.data[COL_ETAPA.PRAZO_LIMITE - 1],
+        documentoRef:  r.data[COL_ETAPA.DOCUMENTO_REF - 1],
+        observacoes:   r.data[COL_ETAPA.OBSERVACOES - 1],
+        rowIndex:      r.rowIndex
+      };
+    });
+
+    // Ordenar por número da etapa
+    etapas.sort(function(a, b) { return a.num - b.num; });
+
+    return {
+      success: true,
+      data: etapas,
+      message: etapas.length + ' etapa(s) encontrada(s).'
+    };
+  } catch (e) {
+    return { success: false, data: [], message: 'Erro ao consultar etapas: ' + e.message };
+  }
+}
+
+/**
+ * Conclui uma etapa e avança automaticamente para a próxima não-N/A.
+ * Atualiza o campo "Etapa Atual" no processo pai.
+ * Se todas forem concluídas, marca o processo como "Concluído".
+ *
+ * @param {string} processoId
+ * @param {number} etapaNum - Número da etapa sendo concluída (1-23)
+ * @returns {{success: boolean, message: string, nextStage: number|null}}
+ */
+function concluirEtapa(processoId, etapaNum) {
+  return withDocumentLock(function() {
+    // 1. Ler todas as etapas do processo
+    var stageRows = DAL.readWhere(SHEET.ETAPAS, function(row) {
+      return String(row[COL_ETAPA.ID_PROCESSO - 1]) === processoId;
+    });
+
+    if (stageRows.length === 0) {
+      return { success: false, message: 'Etapas nao encontradas para ' + processoId, nextStage: null };
+    }
+
+    // Ordenar por número
+    stageRows.sort(function(a, b) {
+      return a.data[COL_ETAPA.NUM - 1] - b.data[COL_ETAPA.NUM - 1];
+    });
+
+    // 2. Encontrar e marcar etapa atual como Concluída
+    var current = null;
+    for (var i = 0; i < stageRows.length; i++) {
+      if (stageRows[i].data[COL_ETAPA.NUM - 1] === etapaNum) {
+        current = stageRows[i];
+        break;
+      }
+    }
+
+    if (!current) {
+      return { success: false, message: 'Etapa ' + etapaNum + ' nao encontrada.', nextStage: null };
+    }
+
+    if (current.data[COL_ETAPA.STATUS - 1] === STATUS.CONCLUIDO) {
+      return { success: false, message: 'Etapa ' + etapaNum + ' ja esta concluida.', nextStage: null };
+    }
+
+    current.data[COL_ETAPA.STATUS - 1]          = STATUS.CONCLUIDO;
+    current.data[COL_ETAPA.DATA_CONCLUSAO - 1]   = new Date();
+    DAL.updateRow(SHEET.ETAPAS, current.rowIndex, current.data);
+
+    // 3. Encontrar próxima etapa não-N/A e Pendente
+    var nextStage = null;
+    for (var j = 0; j < stageRows.length; j++) {
+      var s = stageRows[j];
+      if (s.data[COL_ETAPA.NUM - 1] > etapaNum
+          && s.data[COL_ETAPA.STATUS - 1] === STATUS.PENDENTE) {
+        nextStage = s;
+        break;
+      }
+    }
+
+    if (nextStage) {
+      // Ativar próxima etapa
+      nextStage.data[COL_ETAPA.STATUS - 1]      = STATUS.EM_ANDAMENTO;
+      nextStage.data[COL_ETAPA.DATA_INICIO - 1]  = new Date();
+      DAL.updateRow(SHEET.ETAPAS, nextStage.rowIndex, nextStage.data);
+
+      // Atualizar "Etapa Atual" no processo
+      var nextLabel = nextStage.data[COL_ETAPA.NUM - 1] + '. ' + nextStage.data[COL_ETAPA.ETAPA - 1];
+      atualizarEtapaAtualProcesso_(processoId, nextLabel);
+
+      logAction('CONCLUIR_ETAPA', processoId + ' - etapa ' + etapaNum
+                + ' concluida. Proxima: ' + nextStage.data[COL_ETAPA.NUM - 1]);
+
+      return {
+        success: true,
+        message: 'Etapa ' + etapaNum + ' concluida. Proxima: '
+                 + nextStage.data[COL_ETAPA.NUM - 1] + '. ' + nextStage.data[COL_ETAPA.ETAPA - 1],
+        nextStage: nextStage.data[COL_ETAPA.NUM - 1]
+      };
+    } else {
+      // Verificar se TODAS as etapas estão concluídas ou N/A
+      var allDone = stageRows.every(function(s) {
+        var st = s.data[COL_ETAPA.STATUS - 1];
+        return st === STATUS.CONCLUIDO || st === STATUS.NAO_APLICAVEL;
+      });
+
+      if (allDone) {
+        atualizarStatusProcesso_(processoId, STATUS.CONCLUIDO);
+        logAction('CONCLUIR_PROCESSO', processoId + ' - todas as etapas concluidas');
+        return {
+          success: true,
+          message: 'Todas as etapas concluidas. Processo ' + processoId + ' finalizado.',
+          nextStage: null
+        };
+      }
+
+      logAction('CONCLUIR_ETAPA', processoId + ' - etapa ' + etapaNum + ' concluida (sem proxima pendente)');
+      return {
+        success: true,
+        message: 'Etapa ' + etapaNum + ' concluida.',
+        nextStage: null
+      };
+    }
+  }, 'concluirEtapa');
+}
+
+/**
+ * Atualiza campos de uma etapa específica (datas, docs, observações).
+ *
+ * @param {string} processoId
+ * @param {number} etapaNum
+ * @param {Object} updates - Campos a atualizar
+ * @param {Date}   [updates.prazoLimite]
+ * @param {string} [updates.documentoRef]
+ * @param {string} [updates.observacoes]
+ * @returns {{success: boolean, message: string}}
+ */
+function atualizarEtapa(processoId, etapaNum, updates) {
+  return withDocumentLock(function() {
+    var stageRows = DAL.readWhere(SHEET.ETAPAS, function(row) {
+      return String(row[COL_ETAPA.ID_PROCESSO - 1]) === processoId
+          && row[COL_ETAPA.NUM - 1] === etapaNum;
+    });
+
+    if (stageRows.length === 0) {
+      return { success: false, message: 'Etapa nao encontrada.' };
+    }
+
+    var stage = stageRows[0];
+
+    if (updates.prazoLimite !== undefined) {
+      stage.data[COL_ETAPA.PRAZO_LIMITE - 1] = updates.prazoLimite;
+    }
+    if (updates.documentoRef !== undefined) {
+      stage.data[COL_ETAPA.DOCUMENTO_REF - 1] = normalizeString(updates.documentoRef);
+    }
+    if (updates.observacoes !== undefined) {
+      stage.data[COL_ETAPA.OBSERVACOES - 1] = normalizeString(updates.observacoes);
+    }
+
+    DAL.updateRow(SHEET.ETAPAS, stage.rowIndex, stage.data);
+
+    logAction('ATUALIZAR_ETAPA', processoId + ' - etapa ' + etapaNum + ' atualizada');
+
+    return { success: true, message: 'Etapa ' + etapaNum + ' atualizada.' };
+  }, 'atualizarEtapa');
+}
+
+/**
+ * Retorna a etapa atualmente ativa (Em Andamento) de um processo.
+ * Sem lock (leitura).
+ *
+ * @param {string} processoId
+ * @returns {{num: number, name: string, responsible: string}|null}
+ */
+function getEtapaAtual(processoId) {
+  var stageRows = DAL.readWhere(SHEET.ETAPAS, function(row) {
+    return String(row[COL_ETAPA.ID_PROCESSO - 1]) === processoId
+        && row[COL_ETAPA.STATUS - 1] === STATUS.EM_ANDAMENTO;
+  });
+
+  if (stageRows.length === 0) return null;
+
+  var s = stageRows[0].data;
+  return {
+    num: s[COL_ETAPA.NUM - 1],
+    name: s[COL_ETAPA.ETAPA - 1],
+    responsible: s[COL_ETAPA.RESPONSAVEL - 1]
+  };
+}
+
+/**
+ * Calcula dias em aberto desde a abertura do processo.
+ * @param {Date} dataAbertura
+ * @returns {number}
+ */
+function calcularDiasAberto(dataAbertura) {
+  if (!dataAbertura || !(dataAbertura instanceof Date)) return 0;
+  return Math.max(0, diffDays(new Date(), dataAbertura));
+}
+
+/**
+ * Encontra a data da última transição de etapa (mais recente Data Conclusão).
+ * @param {string} processoId
+ * @param {Array<Array<any>>} [allEtapas] - se já carregado, passa para evitar releitura
+ * @returns {Date|null}
+ */
+function getLastTransitionDate_(processoId, allEtapas) {
+  var etapas = allEtapas || DAL.readAll(SHEET.ETAPAS);
+  var lastDate = null;
+
+  for (var i = 0; i < etapas.length; i++) {
+    var row = etapas[i];
+    // Se allEtapas é o resultado direto de readAll, row é Array; senão pode ser objeto
+    var rowData = Array.isArray(row) ? row : row.data;
+    if (String(rowData[COL_ETAPA.ID_PROCESSO - 1]) !== processoId) continue;
+
+    var dataConclusao = rowData[COL_ETAPA.DATA_CONCLUSAO - 1];
+    if (dataConclusao instanceof Date && !isNaN(dataConclusao.getTime())) {
+      if (!lastDate || dataConclusao > lastDate) {
+        lastDate = dataConclusao;
+      }
+    }
+  }
+
+  return lastDate;
+}
+
+// ── Helpers internos (atualizam Processos de dentro do lock) ──
+
+/**
+ * Atualiza o campo "Etapa Atual" de um processo.
+ * DEVE ser chamada dentro de withDocumentLock().
+ * @param {string} processoId
+ * @param {string} etapaLabel - Ex: "3. Cadastro do Terceiro (Portal)"
+ */
+function atualizarEtapaAtualProcesso_(processoId, etapaLabel) {
+  var proc = DAL.findRow(SHEET.PROCESSOS, COL_PROC.ID, processoId);
+  if (proc) {
+    proc.data[COL_PROC.ETAPA_ATUAL - 1] = etapaLabel;
+    DAL.updateRow(SHEET.PROCESSOS, proc.rowIndex, proc.data);
+  }
+}
+
+/**
+ * Atualiza o Status Geral de um processo.
+ * DEVE ser chamada dentro de withDocumentLock().
+ * @param {string} processoId
+ * @param {string} novoStatus
+ */
+function atualizarStatusProcesso_(processoId, novoStatus) {
+  var proc = DAL.findRow(SHEET.PROCESSOS, COL_PROC.ID, processoId);
+  if (proc) {
+    proc.data[COL_PROC.STATUS_GERAL - 1] = novoStatus;
+    DAL.updateRow(SHEET.PROCESSOS, proc.rowIndex, proc.data);
+  }
+}
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Gestão de Processos
+ * ============================================================
+ * CRUD de processos de contratação, geração de ID sequencial,
+ * criação automática de etapas e cálculo de flags de exigência.
+ * ============================================================
+ */
+
+/**
+ * Cria um novo processo de contratação.
+ * Gera ID sequencial, calcula flags, cria 23 etapas.
+ * LOCKED.
+ *
+ * @param {Object} formData
+ * @param {string} formData.descricao
+ * @param {string} formData.tipoContratacao
+ * @param {string} formData.naturezaTerceiro
+ * @param {string} formData.naturezaContratacao
+ * @param {string} formData.formaContratacao
+ * @param {number} formData.valorEstimado
+ * @param {string} [formData.fornecedor]
+ * @param {string} [formData.cnpjCpf]
+ * @param {string} [formData.centroCusto]
+ * @param {string} [formData.requisitante]
+ * @param {number} [formData.prazoPrevisto] - dias
+ * @param {string} [formData.estrutura]
+ * @param {string} [formData.observacoes]
+ * @returns {{success: boolean, message: string, data: Object|null}}
+ */
+function criarProcesso(formData) {
+  try {
+    return withDocumentLock(function() {
+      // 1. Validar campos obrigatórios
+      var validation = validateRequired(formData, [
+        'descricao', 'tipoContratacao', 'naturezaTerceiro',
+        'naturezaContratacao', 'formaContratacao', 'valorEstimado'
+      ]);
+      if (!validation.valid) {
+        return {
+          success: false,
+          message: 'Campos obrigatorios: ' + validation.missing.join(', '),
+          data: null
+        };
+      }
+
+      if (!isPositiveNumber(formData.valorEstimado)) {
+        return { success: false, message: 'Valor estimado deve ser um numero positivo.', data: null };
+      }
+
+      // 2. Gerar ID sequencial
+      var allProcessos = DAL.readAll(SHEET.PROCESSOS);
+      var newId = generateNextId_(allProcessos);
+
+      // 3. Calcular flags de exigência
+      var flags = calcularRequisitos({
+        tipoContratacao:     formData.tipoContratacao,
+        naturezaTerceiro:    formData.naturezaTerceiro,
+        naturezaContratacao: formData.naturezaContratacao,
+        formaContratacao:    formData.formaContratacao,
+        valorEstimado:       parseFloat(formData.valorEstimado)
+      });
+
+      // 4. Montar linha do processo
+      var hoje = new Date();
+      var prazoDias = parseInt(formData.prazoPrevisto, 10) || 30;
+      var prazoPrevisto = new Date(hoje.getTime() + prazoDias * 24 * 60 * 60 * 1000);
+
+      var newRow = new Array(24);
+      newRow[COL_PROC.ID - 1]                   = newId;
+      newRow[COL_PROC.STATUS_GERAL - 1]         = STATUS.EM_ANDAMENTO;
+      newRow[COL_PROC.ETAPA_ATUAL - 1]          = '1. ' + STAGES[0].name;
+      newRow[COL_PROC.DESCRICAO - 1]            = normalizeString(formData.descricao);
+      newRow[COL_PROC.TIPO_CONTRATACAO - 1]     = formData.tipoContratacao;
+      newRow[COL_PROC.NATUREZA_TERCEIRO - 1]    = formData.naturezaTerceiro;
+      newRow[COL_PROC.NATUREZA_CONTRATACAO - 1] = formData.naturezaContratacao;
+      newRow[COL_PROC.FORMA_CONTRATACAO - 1]    = formData.formaContratacao;
+      newRow[COL_PROC.VALOR_ESTIMADO - 1]       = parseFloat(formData.valorEstimado);
+      newRow[COL_PROC.FORNECEDOR - 1]           = normalizeString(formData.fornecedor || '');
+      newRow[COL_PROC.CNPJ_CPF - 1]             = (formData.cnpjCpf || '').replace(/[^\d]/g, '');
+      newRow[COL_PROC.CENTRO_CUSTO - 1]         = normalizeString(formData.centroCusto || '');
+      newRow[COL_PROC.REQUISITANTE - 1]         = normalizeString(formData.requisitante || '');
+      newRow[COL_PROC.DATA_ABERTURA - 1]        = hoje;
+      newRow[COL_PROC.PRAZO_PREVISTO - 1]       = prazoPrevisto;
+      newRow[COL_PROC.ESTRUTURA - 1]            = normalizeString(formData.estrutura || '');
+      newRow[COL_PROC.OBSERVACOES - 1]          = normalizeString(formData.observacoes || '');
+      newRow[COL_PROC.DIAS_ABERTO - 1]          = 0;
+      newRow[COL_PROC.ALERTAS - 1]              = '';
+
+      // Aplicar flags
+      setProcessFlags_(newRow, flags);
+
+      // 5. Gravar processo
+      DAL.appendRow(SHEET.PROCESSOS, newRow);
+
+      // 6. Criar 23 etapas
+      criarEtapasParaProcesso_(newId);
+
+      // 7. Aplicar flags nas etapas (marcar N/A)
+      aplicarRequisitosEtapas_(newId, flags);
+
+      // 8. Log
+      logAction('CRIAR_PROCESSO', 'Processo ' + newId + ' criado - '
+                + formData.descricao + ' | ' + descreverRequisitos(flags));
+
+      return {
+        success: true,
+        message: 'Processo ' + newId + ' criado com sucesso.',
+        data: { id: newId, flags: flags }
+      };
+    }, 'criarProcesso');
+  } catch (e) {
+    return { success: false, message: e.message, data: null };
+  }
+}
+
+/**
+ * Consulta processos com filtros opcionais.
+ * Operação de leitura — SEM lock.
+ *
+ * @param {Object} [filters]
+ * @param {string} [filters.status]           - Filtrar por status geral
+ * @param {string} [filters.tipoContratacao]  - Filtrar por tipo
+ * @param {string} [filters.requisitante]     - Filtrar por requisitante
+ * @param {string} [filters.busca]            - Busca textual (ID, descrição, fornecedor)
+ * @returns {{success: boolean, data: Array<Object>, message: string}}
+ */
+function consultarProcessos(filters) {
+  try {
+    filters = filters || {};
+    var allRows = DAL.readAll(SHEET.PROCESSOS);
+    var results = [];
+
+    for (var i = 0; i < allRows.length; i++) {
+      var row = allRows[i];
+
+      // Aplicar filtros
+      if (filters.status && row[COL_PROC.STATUS_GERAL - 1] !== filters.status) continue;
+      if (filters.tipoContratacao && row[COL_PROC.TIPO_CONTRATACAO - 1] !== filters.tipoContratacao) continue;
+      if (filters.requisitante && String(row[COL_PROC.REQUISITANTE - 1]).indexOf(filters.requisitante) === -1) continue;
+
+      if (filters.busca) {
+        var termo = String(filters.busca).toLowerCase();
+        var campos = [
+          String(row[COL_PROC.ID - 1]),
+          String(row[COL_PROC.DESCRICAO - 1]),
+          String(row[COL_PROC.FORNECEDOR - 1])
+        ].join(' ').toLowerCase();
+        if (campos.indexOf(termo) === -1) continue;
+      }
+
+      // Atualizar dias em aberto dinamicamente
+      var dataAbertura = row[COL_PROC.DATA_ABERTURA - 1];
+      var diasAberto = (dataAbertura instanceof Date) ? calcularDiasAberto(dataAbertura) : 0;
+
+      results.push({
+        id:                   row[COL_PROC.ID - 1],
+        statusGeral:          row[COL_PROC.STATUS_GERAL - 1],
+        etapaAtual:           row[COL_PROC.ETAPA_ATUAL - 1],
+        descricao:            row[COL_PROC.DESCRICAO - 1],
+        tipoContratacao:      row[COL_PROC.TIPO_CONTRATACAO - 1],
+        naturezaTerceiro:     row[COL_PROC.NATUREZA_TERCEIRO - 1],
+        naturezaContratacao:  row[COL_PROC.NATUREZA_CONTRATACAO - 1],
+        formaContratacao:     row[COL_PROC.FORMA_CONTRATACAO - 1],
+        valorEstimado:        row[COL_PROC.VALOR_ESTIMADO - 1],
+        fornecedor:           row[COL_PROC.FORNECEDOR - 1],
+        cnpjCpf:              row[COL_PROC.CNPJ_CPF - 1],
+        centroCusto:          row[COL_PROC.CENTRO_CUSTO - 1],
+        requisitante:         row[COL_PROC.REQUISITANTE - 1],
+        dataAbertura:         dataAbertura instanceof Date ? formatDateBR(dataAbertura) : '',
+        prazoPrevisto:        row[COL_PROC.PRAZO_PREVISTO - 1] instanceof Date
+                                ? formatDateBR(row[COL_PROC.PRAZO_PREVISTO - 1]) : '',
+        estrutura:            row[COL_PROC.ESTRUTURA - 1],
+        coletaPrecos:         row[COL_PROC.COLETA_PRECOS - 1],
+        proposta:             row[COL_PROC.PROPOSTA - 1],
+        credenciamento:       row[COL_PROC.CREDENCIAMENTO - 1],
+        compliance:           row[COL_PROC.COMPLIANCE - 1],
+        contrato:             row[COL_PROC.CONTRATO - 1],
+        observacoes:          row[COL_PROC.OBSERVACOES - 1],
+        diasAberto:           diasAberto,
+        alertas:              row[COL_PROC.ALERTAS - 1]
+      });
+    }
+
+    return {
+      success: true,
+      data: results,
+      message: results.length + ' processo(s) encontrado(s).'
+    };
+  } catch (e) {
+    return { success: false, data: [], message: 'Erro ao consultar processos: ' + e.message };
+  }
+}
+
+/**
+ * Retorna um único processo por ID.
+ * SEM lock.
+ *
+ * @param {string} id
+ * @returns {{success: boolean, data: Object|null, message: string}}
+ */
+function consultarProcessoPorId(id) {
+  try {
+    var result = consultarProcessos({ busca: id });
+    if (result.data.length === 0) {
+      return { success: false, data: null, message: 'Processo ' + id + ' nao encontrado.' };
+    }
+    var proc = result.data.find(function(p) { return p.id === id; });
+    if (!proc) {
+      return { success: false, data: null, message: 'Processo ' + id + ' nao encontrado.' };
+    }
+    return { success: true, data: proc, message: 'Processo encontrado.' };
+  } catch (e) {
+    return { success: false, data: null, message: 'Erro: ' + e.message };
+  }
+}
+
+/**
+ * Edita campos de um processo existente.
+ * Recalcula flags se campos de classificação forem alterados.
+ * LOCKED.
+ *
+ * @param {string} id
+ * @param {Object} formData - Campos a atualizar (mesmos nomes de criarProcesso)
+ * @returns {{success: boolean, message: string}}
+ */
+function editarProcesso(id, formData) {
+  try {
+    return withDocumentLock(function() {
+      var proc = DAL.findRow(SHEET.PROCESSOS, COL_PROC.ID, id);
+      if (!proc) {
+        return { success: false, message: 'Processo ' + id + ' nao encontrado.' };
+      }
+
+      var row = proc.data;
+      var recalcFlags = false;
+
+      // Atualizar campos fornecidos
+      if (formData.descricao !== undefined) {
+        row[COL_PROC.DESCRICAO - 1] = normalizeString(formData.descricao);
+      }
+      if (formData.tipoContratacao !== undefined) {
+        row[COL_PROC.TIPO_CONTRATACAO - 1] = formData.tipoContratacao;
+        recalcFlags = true;
+      }
+      if (formData.naturezaTerceiro !== undefined) {
+        row[COL_PROC.NATUREZA_TERCEIRO - 1] = formData.naturezaTerceiro;
+        recalcFlags = true;
+      }
+      if (formData.naturezaContratacao !== undefined) {
+        row[COL_PROC.NATUREZA_CONTRATACAO - 1] = formData.naturezaContratacao;
+        recalcFlags = true;
+      }
+      if (formData.formaContratacao !== undefined) {
+        row[COL_PROC.FORMA_CONTRATACAO - 1] = formData.formaContratacao;
+        recalcFlags = true;
+      }
+      if (formData.valorEstimado !== undefined) {
+        if (!isPositiveNumber(formData.valorEstimado)) {
+          return { success: false, message: 'Valor estimado deve ser um numero positivo.' };
+        }
+        row[COL_PROC.VALOR_ESTIMADO - 1] = parseFloat(formData.valorEstimado);
+        recalcFlags = true;
+      }
+      if (formData.fornecedor !== undefined) {
+        row[COL_PROC.FORNECEDOR - 1] = normalizeString(formData.fornecedor);
+      }
+      if (formData.cnpjCpf !== undefined) {
+        row[COL_PROC.CNPJ_CPF - 1] = (formData.cnpjCpf || '').replace(/[^\d]/g, '');
+      }
+      if (formData.centroCusto !== undefined) {
+        row[COL_PROC.CENTRO_CUSTO - 1] = normalizeString(formData.centroCusto);
+      }
+      if (formData.requisitante !== undefined) {
+        row[COL_PROC.REQUISITANTE - 1] = normalizeString(formData.requisitante);
+      }
+      if (formData.estrutura !== undefined) {
+        row[COL_PROC.ESTRUTURA - 1] = normalizeString(formData.estrutura);
+      }
+      if (formData.observacoes !== undefined) {
+        row[COL_PROC.OBSERVACOES - 1] = normalizeString(formData.observacoes);
+      }
+
+      // Recalcular flags se necessário
+      if (recalcFlags) {
+        var flags = calcularRequisitos({
+          tipoContratacao:     row[COL_PROC.TIPO_CONTRATACAO - 1],
+          naturezaTerceiro:    row[COL_PROC.NATUREZA_TERCEIRO - 1],
+          naturezaContratacao: row[COL_PROC.NATUREZA_CONTRATACAO - 1],
+          formaContratacao:    row[COL_PROC.FORMA_CONTRATACAO - 1],
+          valorEstimado:       row[COL_PROC.VALOR_ESTIMADO - 1]
+        });
+        setProcessFlags_(row, flags);
+        aplicarRequisitosEtapas_(id, flags);
+      }
+
+      DAL.updateRow(SHEET.PROCESSOS, proc.rowIndex, row);
+      logAction('EDITAR_PROCESSO', 'Processo ' + id + ' editado'
+                + (recalcFlags ? ' (flags recalculados)' : ''));
+
+      return { success: true, message: 'Processo ' + id + ' atualizado.' };
+    }, 'editarProcesso');
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Cancela um processo com motivo.
+ * LOCKED.
+ *
+ * @param {string} id
+ * @param {string} motivo
+ * @returns {{success: boolean, message: string}}
+ */
+function cancelarProcesso(id, motivo) {
+  try {
+    return withDocumentLock(function() {
+      var proc = DAL.findRow(SHEET.PROCESSOS, COL_PROC.ID, id);
+      if (!proc) {
+        return { success: false, message: 'Processo ' + id + ' nao encontrado.' };
+      }
+
+      if (proc.data[COL_PROC.STATUS_GERAL - 1] === STATUS.CANCELADO) {
+        return { success: false, message: 'Processo ja esta cancelado.' };
+      }
+
+      proc.data[COL_PROC.STATUS_GERAL - 1] = STATUS.CANCELADO;
+      proc.data[COL_PROC.OBSERVACOES - 1]  =
+        (proc.data[COL_PROC.OBSERVACOES - 1] ? proc.data[COL_PROC.OBSERVACOES - 1] + ' | ' : '')
+        + 'CANCELADO: ' + normalizeString(motivo || 'Sem motivo');
+
+      DAL.updateRow(SHEET.PROCESSOS, proc.rowIndex, proc.data);
+      logAction('CANCELAR_PROCESSO', 'Processo ' + id + ' cancelado: ' + (motivo || 'Sem motivo'));
+
+      return { success: true, message: 'Processo ' + id + ' cancelado.' };
+    }, 'cancelarProcesso');
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Suspende um processo com motivo.
+ * LOCKED.
+ *
+ * @param {string} id
+ * @param {string} motivo
+ * @returns {{success: boolean, message: string}}
+ */
+function suspenderProcesso(id, motivo) {
+  try {
+    return withDocumentLock(function() {
+      var proc = DAL.findRow(SHEET.PROCESSOS, COL_PROC.ID, id);
+      if (!proc) {
+        return { success: false, message: 'Processo ' + id + ' nao encontrado.' };
+      }
+
+      var statusAtual = proc.data[COL_PROC.STATUS_GERAL - 1];
+      if (statusAtual !== STATUS.EM_ANDAMENTO) {
+        return { success: false, message: 'Somente processos em andamento podem ser suspensos.' };
+      }
+
+      proc.data[COL_PROC.STATUS_GERAL - 1] = STATUS.SUSPENSO;
+      proc.data[COL_PROC.OBSERVACOES - 1]  =
+        (proc.data[COL_PROC.OBSERVACOES - 1] ? proc.data[COL_PROC.OBSERVACOES - 1] + ' | ' : '')
+        + 'SUSPENSO: ' + normalizeString(motivo || 'Sem motivo');
+
+      DAL.updateRow(SHEET.PROCESSOS, proc.rowIndex, proc.data);
+      logAction('SUSPENDER_PROCESSO', 'Processo ' + id + ' suspenso: ' + (motivo || 'Sem motivo'));
+
+      return { success: true, message: 'Processo ' + id + ' suspenso.' };
+    }, 'suspenderProcesso');
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Reativa um processo suspenso.
+ * LOCKED.
+ *
+ * @param {string} id
+ * @returns {{success: boolean, message: string}}
+ */
+function reativarProcesso(id) {
+  try {
+    return withDocumentLock(function() {
+      var proc = DAL.findRow(SHEET.PROCESSOS, COL_PROC.ID, id);
+      if (!proc) {
+        return { success: false, message: 'Processo ' + id + ' nao encontrado.' };
+      }
+
+      if (proc.data[COL_PROC.STATUS_GERAL - 1] !== STATUS.SUSPENSO) {
+        return { success: false, message: 'Somente processos suspensos podem ser reativados.' };
+      }
+
+      proc.data[COL_PROC.STATUS_GERAL - 1] = STATUS.EM_ANDAMENTO;
+      proc.data[COL_PROC.OBSERVACOES - 1]  =
+        (proc.data[COL_PROC.OBSERVACOES - 1] ? proc.data[COL_PROC.OBSERVACOES - 1] + ' | ' : '')
+        + 'REATIVADO em ' + formatDateBR(new Date());
+
+      DAL.updateRow(SHEET.PROCESSOS, proc.rowIndex, proc.data);
+      logAction('REATIVAR_PROCESSO', 'Processo ' + id + ' reativado');
+
+      return { success: true, message: 'Processo ' + id + ' reativado.' };
+    }, 'reativarProcesso');
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Retorna dados do processo formatados para o formulário de edição.
+ * SEM lock.
+ *
+ * @param {string} id
+ * @returns {{success: boolean, data: Object|null, message: string}}
+ */
+function getProcessoParaEdicao(id) {
+  try {
+    var proc = DAL.findRow(SHEET.PROCESSOS, COL_PROC.ID, id);
+    if (!proc) {
+      return { success: false, data: null, message: 'Processo nao encontrado.' };
+    }
+    var r = proc.data;
+    return {
+      success: true,
+      data: {
+        id:                   r[COL_PROC.ID - 1],
+        descricao:            r[COL_PROC.DESCRICAO - 1],
+        tipoContratacao:      r[COL_PROC.TIPO_CONTRATACAO - 1],
+        naturezaTerceiro:     r[COL_PROC.NATUREZA_TERCEIRO - 1],
+        naturezaContratacao:  r[COL_PROC.NATUREZA_CONTRATACAO - 1],
+        formaContratacao:     r[COL_PROC.FORMA_CONTRATACAO - 1],
+        valorEstimado:        r[COL_PROC.VALOR_ESTIMADO - 1],
+        fornecedor:           r[COL_PROC.FORNECEDOR - 1],
+        cnpjCpf:              r[COL_PROC.CNPJ_CPF - 1],
+        centroCusto:          r[COL_PROC.CENTRO_CUSTO - 1],
+        requisitante:         r[COL_PROC.REQUISITANTE - 1],
+        estrutura:            r[COL_PROC.ESTRUTURA - 1],
+        observacoes:          r[COL_PROC.OBSERVACOES - 1]
+      },
+      message: 'Processo carregado.'
+    };
+  } catch (e) {
+    return { success: false, data: null, message: 'Erro: ' + e.message };
+  }
+}
+
+// ── Helpers internos ────────────────────────────────────────
+
+/**
+ * Gera o próximo ID sequencial: DINT-YYYY-NNN
+ * DEVE ser chamada dentro de withDocumentLock().
+ *
+ * @param {Array<Array<any>>} allRows - Todas as linhas de Processos
+ * @returns {string}
+ */
+function generateNextId_(allRows) {
+  var year = new Date().getFullYear();
+  var prefix = 'DINT-' + year + '-';
+  var maxSeq = 0;
+
+  for (var i = 0; i < allRows.length; i++) {
+    var id = String(allRows[i][COL_PROC.ID - 1]);
+    if (id.indexOf(prefix) === 0) {
+      var seq = parseInt(id.substring(prefix.length), 10);
+      if (!isNaN(seq) && seq > maxSeq) {
+        maxSeq = seq;
+      }
+    }
+  }
+
+  var nextSeq = String(maxSeq + 1);
+  while (nextSeq.length < 3) nextSeq = '0' + nextSeq;
+  return prefix + nextSeq;
+}
+
+/**
+ * Retorna listas de opções para formulários (dropdowns).
+ * SEM lock.
+ * @returns {Object}
+ */
+function getFormOptions() {
+  return {
+    tiposContratacao:      TIPOS_CONTRATACAO,
+    naturezasTerceiro:     NATUREZAS_TERCEIRO,
+    naturezasContratacao:  NATUREZAS_CONTRATACAO,
+    formasContratacao:     FORMAS_CONTRATACAO
+  };
+}
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Gestão de Fornecedores
+ * ============================================================
+ * CRUD de fornecedores, validação CNPJ/CPF, tracking de
+ * cadastro no Portal de Compras e credenciamento.
+ * ============================================================
+ */
+
+/**
+ * Cria um novo fornecedor.
+ * Valida CNPJ/CPF e verifica duplicidade.
+ * LOCKED.
+ *
+ * @param {Object} formData
+ * @param {string} formData.cnpjCpf
+ * @param {string} formData.razaoSocial
+ * @param {string} formData.tipo - "Pessoa Juridica" ou "Pessoa Fisica"
+ * @param {string} [formData.statusCadastro]
+ * @param {Date}   [formData.validadeCadastro]
+ * @param {string} [formData.statusCredenciamento]
+ * @param {Date}   [formData.validadeCredenciamento]
+ * @param {string} [formData.contato]
+ * @param {string} [formData.email]
+ * @param {string} [formData.telefone]
+ * @param {string} [formData.dadosBancarios]
+ * @param {string} [formData.observacoes]
+ * @returns {{success: boolean, message: string, data: Object|null}}
+ */
+function criarFornecedor(formData) {
+  try {
+    return withDocumentLock(function() {
+      // 1. Validar campos obrigatórios
+      var validation = validateRequired(formData, ['cnpjCpf', 'razaoSocial', 'tipo']);
+      if (!validation.valid) {
+        return {
+          success: false,
+          message: 'Campos obrigatorios: ' + validation.missing.join(', '),
+          data: null
+        };
+      }
+
+      // 2. Validar CNPJ/CPF
+      var docLimpo = String(formData.cnpjCpf).replace(/[^\d]/g, '');
+      if (!validateCNPJorCPF(docLimpo)) {
+        return { success: false, message: 'CNPJ/CPF invalido.', data: null };
+      }
+
+      // 3. Verificar duplicidade
+      var existing = DAL.findRow(SHEET.FORNECEDORES, COL_FORN.CNPJ_CPF, docLimpo);
+      if (existing) {
+        return {
+          success: false,
+          message: 'Fornecedor com CNPJ/CPF ' + docLimpo + ' ja cadastrado.',
+          data: null
+        };
+      }
+
+      // 4. Montar linha
+      var newRow = [
+        docLimpo,
+        normalizeString(formData.razaoSocial),
+        formData.tipo,
+        formData.statusCadastro || 'Pendente',
+        formData.validadeCadastro || '',
+        formData.statusCredenciamento || 'Pendente',
+        formData.validadeCredenciamento || '',
+        normalizeString(formData.contato || ''),
+        normalizeString(formData.email || ''),
+        normalizeString(formData.telefone || ''),
+        normalizeString(formData.dadosBancarios || ''),
+        normalizeString(formData.observacoes || '')
+      ];
+
+      DAL.appendRow(SHEET.FORNECEDORES, newRow);
+
+      logAction('CRIAR_FORNECEDOR', 'Fornecedor ' + formData.razaoSocial
+                + ' (' + docLimpo + ') cadastrado');
+
+      return {
+        success: true,
+        message: 'Fornecedor cadastrado com sucesso.',
+        data: { cnpjCpf: docLimpo }
+      };
+    }, 'criarFornecedor');
+  } catch (e) {
+    return { success: false, message: e.message, data: null };
+  }
+}
+
+/**
+ * Consulta fornecedores com filtros opcionais.
+ * SEM lock (leitura).
+ *
+ * @param {Object} [filters]
+ * @param {string} [filters.tipo]
+ * @param {string} [filters.statusCadastro]
+ * @param {string} [filters.statusCredenciamento]
+ * @param {string} [filters.busca] - Busca textual (razão social, CNPJ/CPF)
+ * @returns {{success: boolean, data: Array<Object>, message: string}}
+ */
+function consultarFornecedores(filters) {
+  try {
+    filters = filters || {};
+    var allRows = DAL.readAll(SHEET.FORNECEDORES);
+    var results = [];
+
+    for (var i = 0; i < allRows.length; i++) {
+      var row = allRows[i];
+
+      if (filters.tipo && row[COL_FORN.TIPO - 1] !== filters.tipo) continue;
+      if (filters.statusCadastro && row[COL_FORN.STATUS_CADASTRO - 1] !== filters.statusCadastro) continue;
+      if (filters.statusCredenciamento && row[COL_FORN.STATUS_CREDENCIAMENTO - 1] !== filters.statusCredenciamento) continue;
+
+      if (filters.busca) {
+        var termo = String(filters.busca).toLowerCase();
+        var campos = [
+          String(row[COL_FORN.CNPJ_CPF - 1]),
+          String(row[COL_FORN.RAZAO_SOCIAL - 1])
+        ].join(' ').toLowerCase();
+        if (campos.indexOf(termo) === -1) continue;
+      }
+
+      results.push({
+        cnpjCpf:                row[COL_FORN.CNPJ_CPF - 1],
+        razaoSocial:            row[COL_FORN.RAZAO_SOCIAL - 1],
+        tipo:                   row[COL_FORN.TIPO - 1],
+        statusCadastro:         row[COL_FORN.STATUS_CADASTRO - 1],
+        validadeCadastro:       row[COL_FORN.VALIDADE_CADASTRO - 1] instanceof Date
+                                  ? formatDateBR(row[COL_FORN.VALIDADE_CADASTRO - 1]) : '',
+        statusCredenciamento:   row[COL_FORN.STATUS_CREDENCIAMENTO - 1],
+        validadeCredenciamento: row[COL_FORN.VALIDADE_CREDENCIAMENTO - 1] instanceof Date
+                                  ? formatDateBR(row[COL_FORN.VALIDADE_CREDENCIAMENTO - 1]) : '',
+        contato:                row[COL_FORN.CONTATO - 1],
+        email:                  row[COL_FORN.EMAIL - 1],
+        telefone:               row[COL_FORN.TELEFONE - 1],
+        dadosBancarios:         row[COL_FORN.DADOS_BANCARIOS - 1],
+        observacoes:            row[COL_FORN.OBSERVACOES - 1]
+      });
+    }
+
+    return {
+      success: true,
+      data: results,
+      message: results.length + ' fornecedor(es) encontrado(s).'
+    };
+  } catch (e) {
+    return { success: false, data: [], message: 'Erro: ' + e.message };
+  }
+}
+
+/**
+ * Retorna um fornecedor por CNPJ/CPF.
+ * SEM lock.
+ *
+ * @param {string} cnpjCpf
+ * @returns {{success: boolean, data: Object|null, message: string}}
+ */
+function consultarFornecedorPorCnpj(cnpjCpf) {
+  try {
+    var docLimpo = String(cnpjCpf).replace(/[^\d]/g, '');
+    var result = consultarFornecedores({ busca: docLimpo });
+    var forn = result.data.find(function(f) { return String(f.cnpjCpf) === docLimpo; });
+    if (!forn) {
+      return { success: false, data: null, message: 'Fornecedor nao encontrado.' };
+    }
+    return { success: true, data: forn, message: 'Fornecedor encontrado.' };
+  } catch (e) {
+    return { success: false, data: null, message: 'Erro: ' + e.message };
+  }
+}
+
+/**
+ * Edita campos de um fornecedor existente.
+ * LOCKED.
+ *
+ * @param {string} cnpjCpf
+ * @param {Object} formData - Campos a atualizar
+ * @returns {{success: boolean, message: string}}
+ */
+function editarFornecedor(cnpjCpf, formData) {
+  try {
+    return withDocumentLock(function() {
+      var docLimpo = String(cnpjCpf).replace(/[^\d]/g, '');
+      var forn = DAL.findRow(SHEET.FORNECEDORES, COL_FORN.CNPJ_CPF, docLimpo);
+      if (!forn) {
+        return { success: false, message: 'Fornecedor nao encontrado.' };
+      }
+
+      var row = forn.data;
+
+      if (formData.razaoSocial !== undefined) {
+        row[COL_FORN.RAZAO_SOCIAL - 1] = normalizeString(formData.razaoSocial);
+      }
+      if (formData.tipo !== undefined) {
+        row[COL_FORN.TIPO - 1] = formData.tipo;
+      }
+      if (formData.contato !== undefined) {
+        row[COL_FORN.CONTATO - 1] = normalizeString(formData.contato);
+      }
+      if (formData.email !== undefined) {
+        row[COL_FORN.EMAIL - 1] = normalizeString(formData.email);
+      }
+      if (formData.telefone !== undefined) {
+        row[COL_FORN.TELEFONE - 1] = normalizeString(formData.telefone);
+      }
+      if (formData.dadosBancarios !== undefined) {
+        row[COL_FORN.DADOS_BANCARIOS - 1] = normalizeString(formData.dadosBancarios);
+      }
+      if (formData.observacoes !== undefined) {
+        row[COL_FORN.OBSERVACOES - 1] = normalizeString(formData.observacoes);
+      }
+
+      DAL.updateRow(SHEET.FORNECEDORES, forn.rowIndex, row);
+      logAction('EDITAR_FORNECEDOR', 'Fornecedor ' + row[COL_FORN.RAZAO_SOCIAL - 1]
+                + ' (' + docLimpo + ') editado');
+
+      return { success: true, message: 'Fornecedor atualizado.' };
+    }, 'editarFornecedor');
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Atualiza status e validade de cadastro no Portal de Compras.
+ * LOCKED.
+ *
+ * @param {string} cnpjCpf
+ * @param {string} status - Ex: "Ativo", "Pendente", "Vencido"
+ * @param {Date|string} validade
+ * @returns {{success: boolean, message: string}}
+ */
+function atualizarStatusPortal(cnpjCpf, status, validade) {
+  try {
+    return withDocumentLock(function() {
+      var docLimpo = String(cnpjCpf).replace(/[^\d]/g, '');
+      var forn = DAL.findRow(SHEET.FORNECEDORES, COL_FORN.CNPJ_CPF, docLimpo);
+      if (!forn) {
+        return { success: false, message: 'Fornecedor nao encontrado.' };
+      }
+
+      forn.data[COL_FORN.STATUS_CADASTRO - 1]  = status;
+      forn.data[COL_FORN.VALIDADE_CADASTRO - 1] = validade || '';
+
+      DAL.updateRow(SHEET.FORNECEDORES, forn.rowIndex, forn.data);
+      logAction('ATUALIZAR_PORTAL', docLimpo + ' - Portal: ' + status);
+
+      return { success: true, message: 'Status do portal atualizado.' };
+    }, 'atualizarStatusPortal');
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Atualiza status e validade de credenciamento.
+ * LOCKED.
+ *
+ * @param {string} cnpjCpf
+ * @param {string} status - Ex: "Ativo", "Pendente", "Vencido"
+ * @param {Date|string} validade
+ * @returns {{success: boolean, message: string}}
+ */
+function atualizarCredenciamento(cnpjCpf, status, validade) {
+  try {
+    return withDocumentLock(function() {
+      var docLimpo = String(cnpjCpf).replace(/[^\d]/g, '');
+      var forn = DAL.findRow(SHEET.FORNECEDORES, COL_FORN.CNPJ_CPF, docLimpo);
+      if (!forn) {
+        return { success: false, message: 'Fornecedor nao encontrado.' };
+      }
+
+      forn.data[COL_FORN.STATUS_CREDENCIAMENTO - 1]   = status;
+      forn.data[COL_FORN.VALIDADE_CREDENCIAMENTO - 1]  = validade || '';
+
+      DAL.updateRow(SHEET.FORNECEDORES, forn.rowIndex, forn.data);
+      logAction('ATUALIZAR_CREDENCIAMENTO', docLimpo + ' - Credenciamento: ' + status);
+
+      return { success: true, message: 'Credenciamento atualizado.' };
+    }, 'atualizarCredenciamento');
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Dashboard
+ * ============================================================
+ * Cálculo de KPIs, dados para gráficos e atualização
+ * da aba Dashboard.
+ * ============================================================
+ */
+
+/**
+ * Computa todos os KPIs a partir dos dados de Processos e Etapas.
+ * Função pura de cálculo — SEM lock.
+ *
+ * @returns {Object} KPIs calculados
+ */
+function computeKPIs() {
+  var processos = DAL.readAll(SHEET.PROCESSOS);
+  var hoje = new Date();
+
+  var kpis = {
+    totalProcessos:    processos.length,
+    emAndamento:       0,
+    concluidos:        0,
+    cancelados:        0,
+    suspensos:         0,
+    mediadiasAberto:   0,
+    porTipo:           {},
+    porEtapaAtual:     {},
+    volumeMensal:      {},
+    valorTotal:        0
+  };
+
+  var somadiasAberto = 0;
+  var countAtivos = 0;
+
+  for (var i = 0; i < processos.length; i++) {
+    var proc = processos[i];
+    var status = proc[COL_PROC.STATUS_GERAL - 1];
+    var tipo = proc[COL_PROC.TIPO_CONTRATACAO - 1] || 'Nao informado';
+    var etapaAtual = proc[COL_PROC.ETAPA_ATUAL - 1] || 'N/A';
+    var valor = parseFloat(proc[COL_PROC.VALOR_ESTIMADO - 1]) || 0;
+    var dataAbertura = proc[COL_PROC.DATA_ABERTURA - 1];
+
+    // Contagem por status
+    switch (status) {
+      case STATUS.EM_ANDAMENTO: kpis.emAndamento++; break;
+      case STATUS.CONCLUIDO:    kpis.concluidos++;   break;
+      case STATUS.CANCELADO:    kpis.cancelados++;   break;
+      case STATUS.SUSPENSO:     kpis.suspensos++;    break;
+    }
+
+    // Valor total
+    kpis.valorTotal += valor;
+
+    // Dias em aberto (apenas ativos)
+    if (status === STATUS.EM_ANDAMENTO && dataAbertura instanceof Date) {
+      var dias = calcularDiasAberto(dataAbertura);
+      somadiasAberto += dias;
+      countAtivos++;
+    }
+
+    // Por tipo de contratação
+    kpis.porTipo[tipo] = (kpis.porTipo[tipo] || 0) + 1;
+
+    // Por etapa atual (apenas ativos)
+    if (status === STATUS.EM_ANDAMENTO) {
+      kpis.porEtapaAtual[etapaAtual] = (kpis.porEtapaAtual[etapaAtual] || 0) + 1;
+    }
+
+    // Volume mensal (por mês/ano de abertura)
+    if (dataAbertura instanceof Date) {
+      var mesAno = Utilities.formatDate(dataAbertura, 'America/Sao_Paulo', 'MM/yyyy');
+      kpis.volumeMensal[mesAno] = (kpis.volumeMensal[mesAno] || 0) + 1;
+    }
+  }
+
+  kpis.mediadiasAberto = countAtivos > 0 ? Math.round(somadiasAberto / countAtivos) : 0;
+
+  return kpis;
+}
+
+/**
+ * Atualiza a aba Dashboard com os KPIs calculados.
+ * LOCKED (escreve na aba Dashboard).
+ *
+ * @returns {{success: boolean, message: string}}
+ */
+function refreshDashboard() {
+  try {
+    return withDocumentLock(function() {
+      var kpis = computeKPIs();
+
+      // Layout do Dashboard:
+      // Linha 1: Título
+      // Linha 2-3: KPIs principais
+      // Linha 5+: Tabela por status
+      // Linha 10+: Tabela por tipo
+      // Linha 16+: Volume mensal
+
+      // KPIs principais (Linha 2-3)
+      var kpiData = [
+        ['Total Processos', 'Em Andamento', 'Concluidos', 'Cancelados', 'Suspensos', 'Media Dias Aberto', 'Valor Total Estimado'],
+        [kpis.totalProcessos, kpis.emAndamento, kpis.concluidos, kpis.cancelados, kpis.suspensos, kpis.mediadiasAberto, formatCurrency(kpis.valorTotal)]
+      ];
+      DAL.writeBlock(SHEET.DASHBOARD, 2, 1, kpiData);
+
+      // Tabela por tipo de contratação (Linha 5+)
+      var tipoHeader = [['Tipo Contratacao', 'Quantidade']];
+      var tipoRows = [];
+      var tipos = Object.keys(kpis.porTipo);
+      for (var t = 0; t < tipos.length; t++) {
+        tipoRows.push([tipos[t], kpis.porTipo[tipos[t]]]);
+      }
+      if (tipoRows.length > 0) {
+        DAL.writeBlock(SHEET.DASHBOARD, 5, 1, tipoHeader.concat(tipoRows));
+      }
+
+      // Tabela por etapa atual (Linha 5, coluna 4+)
+      var etapaHeader = [['Etapa Atual', 'Quantidade']];
+      var etapaRows = [];
+      var etapas = Object.keys(kpis.porEtapaAtual);
+      for (var e = 0; e < etapas.length; e++) {
+        etapaRows.push([etapas[e], kpis.porEtapaAtual[etapas[e]]]);
+      }
+      if (etapaRows.length > 0) {
+        DAL.writeBlock(SHEET.DASHBOARD, 5, 4, etapaHeader.concat(etapaRows));
+      }
+
+      // Volume mensal (Linha 5, coluna 7+)
+      var volHeader = [['Mes/Ano', 'Quantidade']];
+      var volRows = [];
+      var meses = Object.keys(kpis.volumeMensal).sort();
+      for (var m = 0; m < meses.length; m++) {
+        volRows.push([meses[m], kpis.volumeMensal[meses[m]]]);
+      }
+      if (volRows.length > 0) {
+        DAL.writeBlock(SHEET.DASHBOARD, 5, 7, volHeader.concat(volRows));
+      }
+
+      logAction('DASHBOARD', 'Dashboard atualizado - ' + kpis.totalProcessos + ' processos');
+
+      return { success: true, message: 'Dashboard atualizado.' };
+    }, 'refreshDashboard');
+  } catch (e) {
+    return { success: false, message: 'Erro ao atualizar dashboard: ' + e.message };
+  }
+}
+
+/**
+ * Retorna dados do dashboard em formato JSON para gráficos do sidebar.
+ * SEM lock (leitura).
+ *
+ * @returns {{success: boolean, data: Object, message: string}}
+ */
+function getDashboardData() {
+  try {
+    var kpis = computeKPIs();
+    return {
+      success: true,
+      data: kpis,
+      message: 'Dados do dashboard carregados.'
+    };
+  } catch (e) {
+    return { success: false, data: null, message: 'Erro: ' + e.message };
+  }
+}
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Sistema de Alertas
+ * ============================================================
+ * Avaliação de condições de alerta, envio de emails,
+ * gerenciamento de triggers (diário, semanal, dashboard).
+ * ============================================================
+ */
+
+// ── Gerenciamento de Triggers ───────────────────────────────
+
+/**
+ * Instala os triggers de tempo (diário, semanal, dashboard).
+ * Idempotente: remove triggers existentes antes de criar.
+ * Deve ser executado pelo owner da planilha.
+ */
+function installTriggers() {
+  removeTriggers();
+
+  // Alertas diários às 8h (Brasília)
+  ScriptApp.newTrigger('executarAlertasDiarios')
+    .timeBased()
+    .atHour(8)
+    .everyDays(1)
+    .inTimezone('America/Sao_Paulo')
+    .create();
+
+  // Relatório semanal — segunda às 9h
+  ScriptApp.newTrigger('executarRelatorioSemanal')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(9)
+    .inTimezone('America/Sao_Paulo')
+    .create();
+
+  // Refresh do dashboard a cada 4h
+  ScriptApp.newTrigger('refreshDashboard')
+    .timeBased()
+    .everyHours(4)
+    .create();
+
+  logAction('TRIGGERS', 'Triggers instalados com sucesso');
+}
+
+/**
+ * Remove todos os triggers do projeto.
+ */
+function removeTriggers() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    ScriptApp.deleteTrigger(triggers[i]);
+  }
+}
+
+// ── Alertas Diários ─────────────────────────────────────────
+
+/**
+ * Avalia todas as condições de alerta e envia email consolidado.
+ * Executado via trigger diário às 8h.
+ *
+ * Condições:
+ * 1. Etapa vencida (prazo ultrapassado)
+ * 2. Próximo vencimento (dentro de X dias)
+ * 3. Processo parado (sem movimentação há X dias)
+ * 4. Credenciamento de fornecedor vencendo (dentro de X dias)
+ */
+function executarAlertasDiarios() {
+  try {
+    var hoje = new Date();
+    var thresholds = getAlertThresholds_();
+    var alerts = [];
+
+    // ── Alertas de Processos/Etapas ───────────────────────
+    var processos = DAL.readAll(SHEET.PROCESSOS);
+    var etapas = DAL.readAll(SHEET.ETAPAS);
+
+    for (var i = 0; i < processos.length; i++) {
+      var proc = processos[i];
+      var id = proc[COL_PROC.ID - 1];
+      var status = proc[COL_PROC.STATUS_GERAL - 1];
+
+      if (status !== STATUS.EM_ANDAMENTO) continue;
+
+      // Encontrar etapas ativas deste processo
+      for (var j = 0; j < etapas.length; j++) {
+        var etapa = etapas[j];
+        if (String(etapa[COL_ETAPA.ID_PROCESSO - 1]) !== String(id)) continue;
+        if (etapa[COL_ETAPA.STATUS - 1] !== STATUS.EM_ANDAMENTO) continue;
+
+        var prazoLimite = etapa[COL_ETAPA.PRAZO_LIMITE - 1];
+        if (prazoLimite instanceof Date) {
+          var diasAte = diffDays(prazoLimite, hoje);
+
+          if (diasAte < 0) {
+            alerts.push({
+              type: 'VENCIDO',
+              processo: id,
+              etapa: etapa[COL_ETAPA.NUM - 1] + '. ' + etapa[COL_ETAPA.ETAPA - 1],
+              detail: 'Atrasado em ' + Math.abs(diasAte) + ' dia(s)',
+              responsible: etapa[COL_ETAPA.RESPONSAVEL - 1]
+            });
+          } else if (diasAte <= thresholds.overdueWarningDays) {
+            alerts.push({
+              type: 'PROXIMO_VENCIMENTO',
+              processo: id,
+              etapa: etapa[COL_ETAPA.NUM - 1] + '. ' + etapa[COL_ETAPA.ETAPA - 1],
+              detail: 'Vence em ' + diasAte + ' dia(s)',
+              responsible: etapa[COL_ETAPA.RESPONSAVEL - 1]
+            });
+          }
+        }
+      }
+
+      // Processo parado
+      var lastTransition = getLastTransitionDate_(id, etapas);
+      if (lastTransition) {
+        var diasParado = diffDays(hoje, lastTransition);
+        if (diasParado >= thresholds.staleDays) {
+          alerts.push({
+            type: 'PROCESSO_PARADO',
+            processo: id,
+            etapa: proc[COL_PROC.ETAPA_ATUAL - 1],
+            detail: 'Sem movimentacao ha ' + diasParado + ' dia(s)',
+            responsible: 'DINT'
+          });
+        }
+      }
+    }
+
+    // ── Alertas de Fornecedores ───────────────────────────
+    var fornecedores = DAL.readAll(SHEET.FORNECEDORES);
+
+    for (var k = 0; k < fornecedores.length; k++) {
+      var forn = fornecedores[k];
+      var valCred = forn[COL_FORN.VALIDADE_CREDENCIAMENTO - 1];
+
+      if (valCred instanceof Date) {
+        var diasCredencial = diffDays(valCred, hoje);
+        if (diasCredencial > 0 && diasCredencial <= thresholds.credentialWarningDays) {
+          alerts.push({
+            type: 'CREDENCIAMENTO_VENCENDO',
+            processo: '',
+            etapa: '',
+            detail: forn[COL_FORN.RAZAO_SOCIAL - 1] + ' - credenciamento vence em '
+                    + diasCredencial + ' dia(s)',
+            responsible: 'DINT'
+          });
+        } else if (diasCredencial <= 0) {
+          alerts.push({
+            type: 'CREDENCIAMENTO_VENCIDO',
+            processo: '',
+            etapa: '',
+            detail: forn[COL_FORN.RAZAO_SOCIAL - 1] + ' - credenciamento VENCIDO ha '
+                    + Math.abs(diasCredencial) + ' dia(s)',
+            responsible: 'DINT'
+          });
+        }
+      }
+    }
+
+    // ── Enviar email e atualizar colunas ──────────────────
+    if (alerts.length > 0) {
+      enviarEmailAlertas_(alerts);
+
+      // Atualizar coluna Alertas nos processos
+      withDocumentLock(function() {
+        atualizarColunasAlerta_(processos, alerts);
+      }, 'atualizarAlertasDiarios');
+    }
+
+    logAction('ALERTAS_DIARIOS', alerts.length + ' alerta(s) identificado(s)');
+  } catch (e) {
+    logAction('ERRO_ALERTAS', 'Falha nos alertas diarios: ' + e.message);
+  }
+}
+
+// ── Relatório Semanal ───────────────────────────────────────
+
+/**
+ * Gera e envia relatório semanal por email.
+ * Executado via trigger semanal (segunda 9h).
+ */
+function executarRelatorioSemanal() {
+  try {
+    var kpis = computeKPIs();
+    var hoje = new Date();
+
+    var html = '<h2>Workflow DINT - Relatorio Semanal</h2>'
+      + '<p><strong>Data:</strong> ' + formatDateBR(hoje) + '</p>'
+      + '<hr>'
+      + '<h3>Resumo Geral</h3>'
+      + '<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;">'
+      + '<tr><th>Indicador</th><th>Valor</th></tr>'
+      + '<tr><td>Total de Processos</td><td>' + kpis.totalProcessos + '</td></tr>'
+      + '<tr><td>Em Andamento</td><td>' + kpis.emAndamento + '</td></tr>'
+      + '<tr><td>Concluidos</td><td>' + kpis.concluidos + '</td></tr>'
+      + '<tr><td>Cancelados</td><td>' + kpis.cancelados + '</td></tr>'
+      + '<tr><td>Suspensos</td><td>' + kpis.suspensos + '</td></tr>'
+      + '<tr><td>Media Dias em Aberto</td><td>' + kpis.mediadiasAberto + '</td></tr>'
+      + '<tr><td>Valor Total Estimado</td><td>' + formatCurrency(kpis.valorTotal) + '</td></tr>'
+      + '</table>';
+
+    // Tabela por tipo
+    var tipos = Object.keys(kpis.porTipo);
+    if (tipos.length > 0) {
+      html += '<h3>Por Tipo de Contratacao</h3>'
+        + '<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;">'
+        + '<tr><th>Tipo</th><th>Qtd</th></tr>';
+      for (var t = 0; t < tipos.length; t++) {
+        html += '<tr><td>' + tipos[t] + '</td><td>' + kpis.porTipo[tipos[t]] + '</td></tr>';
+      }
+      html += '</table>';
+    }
+
+    html += '<hr><p style="color:#888;font-size:11px;">Workflow DINT / FGV v2.0 - Relatorio automatico</p>';
+
+    var recipients = getAlertRecipients_();
+    MailApp.sendEmail({
+      to: recipients,
+      subject: 'Workflow DINT - Relatorio Semanal - ' + formatDateBR(hoje),
+      htmlBody: html
+    });
+
+    logAction('RELATORIO_SEMANAL', 'Enviado para ' + recipients);
+  } catch (e) {
+    logAction('ERRO_RELATORIO', 'Falha no relatorio semanal: ' + e.message);
+  }
+}
+
+// ── Consultas de Alertas (para UI) ──────────────────────────
+
+/**
+ * Retorna alertas ativos para exibição no painel.
+ * SEM lock.
+ *
+ * @returns {{success: boolean, data: Array<Object>, message: string}}
+ */
+function getAlertasAtivos() {
+  try {
+    var hoje = new Date();
+    var thresholds = getAlertThresholds_();
+    var alerts = [];
+
+    var processos = DAL.readAll(SHEET.PROCESSOS);
+    for (var i = 0; i < processos.length; i++) {
+      var alertText = processos[i][COL_PROC.ALERTAS - 1];
+      if (alertText) {
+        alerts.push({
+          processo: processos[i][COL_PROC.ID - 1],
+          descricao: processos[i][COL_PROC.DESCRICAO - 1],
+          alerta: alertText,
+          etapaAtual: processos[i][COL_PROC.ETAPA_ATUAL - 1]
+        });
+      }
+    }
+
+    return {
+      success: true,
+      data: alerts,
+      message: alerts.length + ' alerta(s) ativo(s).'
+    };
+  } catch (e) {
+    return { success: false, data: [], message: 'Erro: ' + e.message };
+  }
+}
+
+/**
+ * Retorna configuração de alertas.
+ * @returns {Object}
+ */
+function getConfigAlertas() {
+  return {
+    recipients: getAlertRecipients_(),
+    thresholds: getAlertThresholds_()
+  };
+}
+
+/**
+ * Salva configuração de alertas.
+ * @param {Object} config
+ * @param {string} config.recipients - emails separados por vírgula
+ * @param {Object} config.thresholds
+ * @returns {{success: boolean, message: string}}
+ */
+function salvarConfigAlertas(config) {
+  try {
+    if (config.recipients) {
+      setScriptConfig('ALERT_RECIPIENTS', config.recipients);
+    }
+    if (config.thresholds) {
+      setScriptConfig('ALERT_THRESHOLDS', JSON.stringify(config.thresholds));
+    }
+    logAction('CONFIG_ALERTAS', 'Configuracao de alertas atualizada');
+    return { success: true, message: 'Configuracao salva.' };
+  } catch (e) {
+    return { success: false, message: 'Erro: ' + e.message };
+  }
+}
+
+// ── Helpers internos ────────────────────────────────────────
+
+/**
+ * Retorna lista de destinatários de alerta.
+ * @returns {string}
+ */
+function getAlertRecipients_() {
+  return getScriptConfig('ALERT_RECIPIENTS') || '';
+}
+
+/**
+ * Retorna thresholds de alerta.
+ * @returns {Object}
+ */
+function getAlertThresholds_() {
+  var prop = getScriptConfig('ALERT_THRESHOLDS');
+  if (prop) {
+    try { return JSON.parse(prop); } catch (e) { /* fallback */ }
+  }
+  return {
+    overdueWarningDays:     ALERT_DEFAULTS.OVERDUE_WARNING_DAYS,
+    staleDays:              ALERT_DEFAULTS.STALE_DAYS,
+    credentialWarningDays:  ALERT_DEFAULTS.CREDENTIAL_WARNING_DAYS
+  };
+}
+
+/**
+ * Envia email consolidado com alertas.
+ * @param {Array<Object>} alerts
+ */
+function enviarEmailAlertas_(alerts) {
+  var recipients = getAlertRecipients_();
+  if (!recipients) return;
+
+  var hoje = formatDateBR(new Date());
+  var html = '<h2>Workflow DINT - Alertas Diarios</h2>'
+    + '<p><strong>Data:</strong> ' + hoje + '</p>'
+    + '<p><strong>' + alerts.length + ' alerta(s) identificado(s)</strong></p>'
+    + '<hr>'
+    + '<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;">'
+    + '<tr style="background:#f0f0f0;"><th>Tipo</th><th>Processo</th><th>Etapa</th><th>Detalhe</th><th>Responsavel</th></tr>';
+
+  for (var i = 0; i < alerts.length; i++) {
+    var a = alerts[i];
+    var bgColor = a.type === 'VENCIDO' || a.type === 'CREDENCIAMENTO_VENCIDO' ? '#ffe0e0' : '#fff3cd';
+    html += '<tr style="background:' + bgColor + ';">'
+      + '<td>' + a.type + '</td>'
+      + '<td>' + a.processo + '</td>'
+      + '<td>' + a.etapa + '</td>'
+      + '<td>' + a.detail + '</td>'
+      + '<td>' + a.responsible + '</td>'
+      + '</tr>';
+  }
+
+  html += '</table>'
+    + '<hr><p style="color:#888;font-size:11px;">Workflow DINT / FGV v2.0 - Alerta automatico</p>';
+
+  MailApp.sendEmail({
+    to: recipients,
+    subject: 'Workflow DINT - ' + alerts.length + ' Alerta(s) - ' + hoje,
+    htmlBody: html
+  });
+}
+
+/**
+ * Atualiza a coluna Alertas nos processos com base nos alertas identificados.
+ * DEVE ser chamada dentro de withDocumentLock().
+ *
+ * @param {Array<Array<any>>} processos - Dados atuais de Processos
+ * @param {Array<Object>} alerts - Alertas identificados
+ */
+function atualizarColunasAlerta_(processos, alerts) {
+  // Agrupar alertas por processo
+  var alertsPorProcesso = {};
+  for (var i = 0; i < alerts.length; i++) {
+    var a = alerts[i];
+    if (a.processo) {
+      if (!alertsPorProcesso[a.processo]) {
+        alertsPorProcesso[a.processo] = [];
+      }
+      alertsPorProcesso[a.processo].push(a.type + ': ' + a.detail);
+    }
+  }
+
+  // Atualizar coluna Alertas
+  for (var j = 0; j < processos.length; j++) {
+    var procId = processos[j][COL_PROC.ID - 1];
+    var alertTexts = alertsPorProcesso[procId];
+    var newAlertValue = alertTexts ? alertTexts.join(' | ') : '';
+
+    // Só atualizar se mudou
+    if (String(processos[j][COL_PROC.ALERTAS - 1]) !== newAlertValue) {
+      DAL.updateCell(SHEET.PROCESSOS, j + 2, COL_PROC.ALERTAS, newAlertValue);
+    }
+  }
+}
+
+
+// ╔════════════════════════════════════════════════════════════╗
+// ║  PARTE 2: ENTRY POINT, MENU E SIDEBAR (consolidado)      ║
+// ╚════════════════════════════════════════════════════════════╝
+
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Entry Point, Menu e HTML Inline
+ * ============================================================
+ * onOpen, onInstall, menu customizado, sidebar com HTML embutido
+ * e funcoes de painel que retornam HTML como strings.
+ *
+ * Todo o HTML (CSS, JS, templates) esta embutido diretamente
+ * neste arquivo usando template literals (V8 runtime).
+ * ============================================================
+ */
+
+/**
+ * Trigger simples — executado quando a planilha e aberta.
+ * Cria o menu customizado.
+ */
+function onOpen(e) {
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('Workflow DINT v2.0')
+    .addItem('Abrir Painel Principal', 'showSidebarMain')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('Processos')
+      .addItem('Novo Processo', 'showSidebarProcessoNovo')
+      .addItem('Consultar Processos', 'showSidebarProcessoConsulta'))
+    .addSubMenu(ui.createMenu('Fornecedores')
+      .addItem('Novo Fornecedor', 'showSidebarFornecedorNovo')
+      .addItem('Consultar Fornecedores', 'showSidebarFornecedorConsulta'))
+    .addSubMenu(ui.createMenu('Dashboard')
+      .addItem('Atualizar Dashboard', 'refreshDashboard'))
+    .addSubMenu(ui.createMenu('Configuracao')
+      .addItem('Parametros', 'showSidebarConfig')
+      .addItem('Gerenciar Alertas', 'showSidebarAlertas')
+      .addItem('Instalar Triggers', 'installTriggers')
+      .addItem('Remover Triggers', 'removeTriggers'))
+    .addToUi();
+}
+
+/**
+ * Executado quando o add-on e instalado.
+ */
+function onInstall(e) {
+  onOpen(e);
+}
+
+// ── Sidebar HTML Inline ──────────────────────────────────────
+
+/**
+ * Retorna o HTML completo do sidebar como string.
+ * Inclui CSS, estrutura HTML e JavaScript embutidos.
+ */
+function getSidebarHtmlString_() {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+  /* ── Reset & Base ──────────────────────────────────── */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Google Sans', Roboto, Arial, sans-serif;
+    font-size: 13px;
+    color: #202124;
+    background: #fff;
+    line-height: 1.5;
+  }
+
+  /* ── Navigation Bar ────────────────────────────────── */
+  .nav-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px;
+    background: #1a73e8;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .nav-btn {
+    flex: 1;
+    min-width: 70px;
+    padding: 6px 4px;
+    border: none;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.2s;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.3); }
+  .nav-btn.active { background: #fff; color: #1a73e8; }
+
+  /* ── Content Area ──────────────────────────────────── */
+  #content-area { padding: 12px; }
+
+  /* ── Cards & Panels ────────────────────────────────── */
+  .card {
+    background: #f8f9fa;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a73e8;
+    margin-bottom: 8px;
+  }
+
+  /* ── KPI Cards ─────────────────────────────────────── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .kpi-card {
+    background: #e8f0fe;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+  .kpi-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a73e8;
+  }
+  .kpi-label {
+    font-size: 11px;
+    color: #5f6368;
+    margin-top: 2px;
+  }
+
+  /* ── Forms ─────────────────────────────────────────── */
+  .form-group {
+    margin-bottom: 10px;
+  }
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #5f6368;
+    margin-bottom: 3px;
+  }
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 2px rgba(26,115,232,0.1);
+  }
+  .form-group textarea { resize: vertical; min-height: 60px; }
+
+  /* ── Buttons ───────────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .btn-primary {
+    background: #1a73e8;
+    color: #fff;
+  }
+  .btn-primary:hover { background: #1557b0; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .btn-secondary {
+    background: #f1f3f4;
+    color: #3c4043;
+  }
+  .btn-secondary:hover { background: #e8eaed; }
+  .btn-danger {
+    background: #ea4335;
+    color: #fff;
+  }
+  .btn-danger:hover { background: #c5221f; }
+  .btn-success {
+    background: #34a853;
+    color: #fff;
+  }
+  .btn-success:hover { background: #2d8e47; }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+  .btn-block { width: 100%; }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-group {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  /* ── Tables ────────────────────────────────────────── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .data-table th {
+    background: #f1f3f4;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #5f6368;
+    border-bottom: 2px solid #dadce0;
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #f1f3f4;
+  }
+  .data-table tr:hover td { background: #f8f9fa; }
+  .data-table .clickable { cursor: pointer; color: #1a73e8; }
+  .data-table .clickable:hover { text-decoration: underline; }
+
+  /* ── Status Badges ─────────────────────────────────── */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge-andamento { background: #e8f0fe; color: #1a73e8; }
+  .badge-concluido { background: #e6f4ea; color: #137333; }
+  .badge-cancelado { background: #fce8e6; color: #c5221f; }
+  .badge-suspenso  { background: #fef7e0; color: #ea8600; }
+  .badge-pendente  { background: #f1f3f4; color: #5f6368; }
+  .badge-na        { background: #f1f3f4; color: #9aa0a6; }
+
+  /* ── Timeline (Etapas) ─────────────────────────────── */
+  .timeline { list-style: none; padding-left: 0; }
+  .timeline-item {
+    position: relative;
+    padding: 8px 0 8px 24px;
+    border-left: 2px solid #dadce0;
+  }
+  .timeline-item:last-child { border-left: 2px solid transparent; }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 12px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #dadce0;
+  }
+  .timeline-item.active::before { background: #1a73e8; }
+  .timeline-item.done::before   { background: #34a853; }
+  .timeline-item.na::before     { background: #9aa0a6; }
+  .timeline-item .tl-title { font-weight: 500; font-size: 12px; }
+  .timeline-item .tl-meta  { font-size: 11px; color: #5f6368; }
+
+  /* ── Loading Overlay ───────────────────────────────── */
+  #loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,0.7);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+  }
+  #loading-overlay.show { display: flex; }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid #dadce0;
+    border-top-color: #1a73e8;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Toast Notifications ───────────────────────────── */
+  #toast-container {
+    position: fixed;
+    bottom: 12px; left: 12px; right: 12px;
+    z-index: 1000;
+  }
+  .toast {
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-top: 6px;
+    font-size: 12px;
+    animation: slideUp 0.3s ease;
+  }
+  .toast-success { background: #e6f4ea; color: #137333; border: 1px solid #ceead6; }
+  .toast-error   { background: #fce8e6; color: #c5221f; border: 1px solid #f5c6cb; }
+  .toast-warning { background: #fef7e0; color: #ea8600; border: 1px solid #feefc3; }
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+
+  /* ── Alerts Panel ──────────────────────────────────── */
+  .alert-item {
+    padding: 8px;
+    border-left: 3px solid #ea4335;
+    background: #fce8e6;
+    border-radius: 0 4px 4px 0;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .alert-item.warning {
+    border-left-color: #ea8600;
+    background: #fef7e0;
+  }
+
+  /* ── Search Bar ────────────────────────────────────── */
+  .search-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .search-bar input {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
+  /* ── Home Panel ────────────────────────────────────── */
+  .home-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .home-card {
+    background: #f8f9fa;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    padding: 16px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .home-card:hover {
+    border-color: #1a73e8;
+    box-shadow: 0 2px 8px rgba(26,115,232,0.15);
+  }
+  .home-card .icon { font-size: 24px; margin-bottom: 6px; }
+  .home-card .label { font-size: 12px; font-weight: 500; color: #3c4043; }
+
+  /* ── Utility ───────────────────────────────────────── */
+  .text-center { text-align: center; }
+  .text-muted  { color: #5f6368; }
+  .text-small  { font-size: 11px; }
+  .mt-8  { margin-top: 8px; }
+  .mt-12 { margin-top: 12px; }
+  .mb-8  { margin-bottom: 8px; }
+  .mb-12 { margin-bottom: 12px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <div class="nav-bar">
+    <button class="nav-btn active" data-panel="home" onclick="navigateTo('home')">Home</button>
+    <button class="nav-btn" data-panel="processos" onclick="navigateTo('processos')">Processos</button>
+    <button class="nav-btn" data-panel="fornecedores" onclick="navigateTo('fornecedores')">Fornecedores</button>
+    <button class="nav-btn" data-panel="dashboard" onclick="navigateTo('dashboard')">Dashboard</button>
+    <button class="nav-btn" data-panel="alertas" onclick="navigateTo('alertas')">Alertas</button>
+    <button class="nav-btn" data-panel="config" onclick="navigateTo('config')">Config</button>
+  </div>
+
+  <!-- Content Area (SPA) -->
+  <div id="content-area">
+    <div class="text-center mt-12">
+      <div class="spinner" style="margin: 40px auto;"></div>
+      <p class="text-muted text-small">Carregando...</p>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <script>
+/**
+ * ============================================================
+ * WORKFLOW DINT / FGV v2.0 — Client-Side JavaScript
+ * ============================================================
+ * Wrapper para google.script.run, navegação SPA,
+ * loading states e toast notifications.
+ * ============================================================
+ */
+
+// ── Server Call Wrapper ─────────────────────────────────────
+
+/**
+ * Chama uma função server-side com Promise semantics.
+ * Exibe loading overlay e trata erros com toast.
+ *
+ * @param {string} functionName - Nome da função no servidor
+ * @param {...*} args - Argumentos para a função
+ * @returns {Promise<*>}
+ */
+function callServer(functionName) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  showLoading();
+
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        resolve(result);
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        var msg = error.message || error || 'Erro inesperado';
+        // Auto-retry para erros de lock
+        if (msg.indexOf('sistema esta ocupado') !== -1) {
+          showToast('Sistema ocupado. Tentando novamente...', 'warning');
+          setTimeout(function() {
+            var retryArgs = [functionName].concat(args);
+            callServerNoRetry.apply(null, retryArgs).then(resolve).catch(reject);
+          }, 3000);
+        } else {
+          showToast(msg, 'error');
+          reject(error);
+        }
+      });
+
+    runner[functionName].apply(runner, args);
+  });
+}
+
+/**
+ * Versão sem auto-retry do callServer.
+ */
+function callServerNoRetry(functionName) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  showLoading();
+
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        resolve(result);
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        showToast(error.message || 'Erro inesperado', 'error');
+        reject(error);
+      });
+
+    runner[functionName].apply(runner, args);
+  });
+}
+
+// ── Navigation ──────────────────────────────────────────────
+
+var currentPanel = 'home';
+
+/**
+ * Navega para um painel específico.
+ * @param {string} panelName
+ * @param {Object} [params] - Parâmetros opcionais para o painel
+ */
+function navigateTo(panelName, params) {
+  currentPanel = panelName;
+
+  // Atualizar botões ativos
+  var btns = document.querySelectorAll('.nav-btn');
+  btns.forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.panel === panelName);
+  });
+
+  var contentArea = document.getElementById('content-area');
+
+  switch (panelName) {
+    case 'home':
+      renderHomePanel();
+      break;
+    case 'processos':
+    case 'processos-consulta':
+      loadPanel('getPanelProcessos', function() { initProcessosPanel('consulta'); });
+      break;
+    case 'processos-novo':
+      loadPanel('getPanelProcessos', function() { initProcessosPanel('novo'); });
+      break;
+    case 'fornecedores':
+    case 'fornecedores-consulta':
+      loadPanel('getPanelFornecedores', function() { initFornecedoresPanel('consulta'); });
+      break;
+    case 'fornecedores-novo':
+      loadPanel('getPanelFornecedores', function() { initFornecedoresPanel('novo'); });
+      break;
+    case 'etapas':
+      loadPanel('getPanelEtapas', function() { initEtapasPanel(params); });
+      break;
+    case 'dashboard':
+      loadPanel('getPanelDashboard', function() { initDashboardPanel(); });
+      break;
+    case 'alertas':
+      loadPanel('getPanelAlertas', function() { initAlertasPanel(); });
+      break;
+    case 'config':
+      loadPanel('getPanelConfig', function() { initConfigPanel(); });
+      break;
+    default:
+      renderHomePanel();
+  }
+}
+
+/**
+ * Carrega HTML de um painel server-side e injeta no content area.
+ * @param {string} serverFunction
+ * @param {Function} [initCallback] - Chamado após injeção
+ */
+function loadPanel(serverFunction, initCallback) {
+  callServer(serverFunction).then(function(html) {
+    document.getElementById('content-area').innerHTML = html;
+    if (initCallback) initCallback();
+  }).catch(function() {
+    document.getElementById('content-area').innerHTML =
+      '<div class="card text-center"><p class="text-muted">Erro ao carregar painel.</p></div>';
+  });
+}
+
+/**
+ * Renderiza o painel Home (ícones de navegação).
+ */
+function renderHomePanel() {
+  var html = '<div class="card">'
+    + '<div class="card-title">Workflow DINT / FGV v2.0</div>'
+    + '<p class="text-small text-muted mb-12">Controle de Contratacoes — Diretoria Internacional</p>'
+    + '</div>'
+    + '<div class="home-grid">'
+    + '<div class="home-card" onclick="navigateTo(\\'processos\\')"><div class="icon">&#128203;</div><div class="label">Processos</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\\'fornecedores\\')"><div class="icon">&#127970;</div><div class="label">Fornecedores</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\\'dashboard\\')"><div class="icon">&#128202;</div><div class="label">Dashboard</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\\'alertas\\')"><div class="icon">&#128276;</div><div class="label">Alertas</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\\'config\\')"><div class="icon">&#9881;</div><div class="label">Configuracao</div></div>'
+    + '</div>'
+    + '<p class="text-small text-muted text-center mt-12">v2.0 — Powered by Google Apps Script</p>';
+
+  document.getElementById('content-area').innerHTML = html;
+}
+
+// ── Loading Overlay ─────────────────────────────────────────
+
+function showLoading() {
+  var overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.classList.add('show');
+}
+
+function hideLoading() {
+  var overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+// ── Toast Notifications ─────────────────────────────────────
+
+/**
+ * Exibe uma notificação toast.
+ * @param {string} message
+ * @param {string} type - 'success', 'error', 'warning'
+ * @param {number} [duration=4000] - ms para auto-dismiss
+ */
+function showToast(message, type, duration) {
+  type = type || 'success';
+  duration = duration || 4000;
+
+  var container = document.getElementById('toast-container');
+  if (!container) return;
+
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  setTimeout(function() {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s';
+    setTimeout(function() { toast.remove(); }, 300);
+  }, duration);
+}
+
+// ── Form Helpers ────────────────────────────────────────────
+
+/**
+ * Coleta dados de um formulário por ID.
+ * @param {string} formId
+ * @returns {Object}
+ */
+function collectFormData(formId) {
+  var form = document.getElementById(formId);
+  if (!form) return {};
+
+  var data = {};
+  var inputs = form.querySelectorAll('input, select, textarea');
+  inputs.forEach(function(input) {
+    if (input.name) {
+      data[input.name] = input.value;
+    }
+  });
+  return data;
+}
+
+/**
+ * Preenche um formulário com dados.
+ * @param {string} formId
+ * @param {Object} data
+ */
+function fillFormData(formId, data) {
+  var form = document.getElementById(formId);
+  if (!form || !data) return;
+
+  Object.keys(data).forEach(function(key) {
+    var input = form.querySelector('[name="' + key + '"]');
+    if (input) {
+      input.value = data[key] || '';
+    }
+  });
+}
+
+/**
+ * Reseta um formulário.
+ * @param {string} formId
+ */
+function resetForm(formId) {
+  var form = document.getElementById(formId);
+  if (form) form.reset();
+}
+
+// ── Status Badge Helper ─────────────────────────────────────
+
+/**
+ * Retorna HTML de badge baseado no status.
+ * @param {string} status
+ * @returns {string}
+ */
+function statusBadge(status) {
+  var cls = 'badge-pendente';
+  switch (status) {
+    case 'Em Andamento': cls = 'badge-andamento'; break;
+    case 'Concluido':    cls = 'badge-concluido'; break;
+    case 'Cancelado':    cls = 'badge-cancelado'; break;
+    case 'Suspenso':     cls = 'badge-suspenso';  break;
+    case 'N/A':          cls = 'badge-na';         break;
+  }
+  return '<span class="badge ' + cls + '">' + (status || 'Pendente') + '</span>';
+}
+
+// ── Initialize on Load ──────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Verificar se há painel pré-definido
+  callServer('getInitialPanel').then(function(panel) {
+    if (panel && panel !== 'home') {
+      navigateTo(panel);
+    } else {
+      renderHomePanel();
+    }
+  }).catch(function() {
+    renderHomePanel();
+  });
+});
+</script>
+</body>
+</html>
+`;
+}
+
+// ── Sidebar Launchers ────────────────────────────────────────
+
+/**
+ * Abre o sidebar principal (painel de navegacao).
+ */
+function showSidebarMain() {
+  var htmlString = getSidebarHtmlString_();
+  var html = HtmlService.createHtmlOutput(htmlString)
+    .setTitle('Workflow DINT / FGV v2.0')
+    .setWidth(420);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+/**
+ * Abre o sidebar focado em novo processo.
+ */
+function showSidebarProcessoNovo() {
+  setUserState('SIDEBAR_PANEL', 'processos-novo');
+  showSidebarMain();
+}
+
+/**
+ * Abre o sidebar focado em consulta de processos.
+ */
+function showSidebarProcessoConsulta() {
+  setUserState('SIDEBAR_PANEL', 'processos-consulta');
+  showSidebarMain();
+}
+
+/**
+ * Abre o sidebar focado em novo fornecedor.
+ */
+function showSidebarFornecedorNovo() {
+  setUserState('SIDEBAR_PANEL', 'fornecedores-novo');
+  showSidebarMain();
+}
+
+/**
+ * Abre o sidebar focado em consulta de fornecedores.
+ */
+function showSidebarFornecedorConsulta() {
+  setUserState('SIDEBAR_PANEL', 'fornecedores-consulta');
+  showSidebarMain();
+}
+
+/**
+ * Abre o sidebar focado em configuracao.
+ */
+function showSidebarConfig() {
+  setUserState('SIDEBAR_PANEL', 'config');
+  showSidebarMain();
+}
+
+/**
+ * Abre o sidebar focado em alertas.
+ */
+function showSidebarAlertas() {
+  setUserState('SIDEBAR_PANEL', 'alertas');
+  showSidebarMain();
+}
+
+// ── Funcoes de painel (retornam HTML para o sidebar SPA) ─────
+
+/**
+ * Retorna o painel inicial do sidebar.
+ * @returns {string}
+ */
+function getInitialPanel() {
+  var panel = getUserState('SIDEBAR_PANEL') || 'home';
+  // Limpar estado apos leitura
+  setUserState('SIDEBAR_PANEL', '');
+  return panel;
+}
+
+/**
+ * Retorna HTML do painel de processos.
+ * @returns {string}
+ */
+function getPanelProcessos() {
+  return `<!-- Painel de Processos -->
+<div id="processos-view-consulta">
+  <div class="card">
+    <div class="card-title">Processos de Contratacao</div>
+    <div class="btn-group mb-8">
+      <button class="btn btn-primary btn-sm" onclick="showProcessoForm()">Novo Processo</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="proc-search" placeholder="Buscar por ID, descricao ou fornecedor..." onkeyup="if(event.key==='Enter')buscarProcessos()">
+      <button class="btn btn-secondary btn-sm" onclick="buscarProcessos()">Buscar</button>
+    </div>
+    <div class="form-group">
+      <select id="proc-filter-status" onchange="buscarProcessos()" style="padding:6px;font-size:12px;">
+        <option value="">Todos os Status</option>
+        <option value="Em Andamento">Em Andamento</option>
+        <option value="Concluido">Concluido</option>
+        <option value="Cancelado">Cancelado</option>
+        <option value="Suspenso">Suspenso</option>
+      </select>
+    </div>
+  </div>
+  <div id="proc-results"></div>
+</div>
+
+<div id="processos-view-form" class="hidden">
+  <div class="card">
+    <div class="card-title" id="proc-form-title">Novo Processo</div>
+    <form id="proc-form">
+      <input type="hidden" name="id" id="proc-form-id">
+      <div class="form-group">
+        <label>Descricao *</label>
+        <textarea name="descricao" required></textarea>
+      </div>
+      <div class="form-group">
+        <label>Tipo de Contratacao *</label>
+        <select name="tipoContratacao" required id="proc-tipo"></select>
+      </div>
+      <div class="form-group">
+        <label>Natureza do Terceiro *</label>
+        <select name="naturezaTerceiro" required id="proc-nat-terceiro"></select>
+      </div>
+      <div class="form-group">
+        <label>Natureza da Contratacao *</label>
+        <select name="naturezaContratacao" required id="proc-nat-contratacao"></select>
+      </div>
+      <div class="form-group">
+        <label>Forma de Contratacao *</label>
+        <select name="formaContratacao" required id="proc-forma"></select>
+      </div>
+      <div class="form-group">
+        <label>Valor Estimado (R$) *</label>
+        <input type="number" name="valorEstimado" step="0.01" min="0.01" required>
+      </div>
+      <div class="form-group">
+        <label>Fornecedor</label>
+        <input type="text" name="fornecedor">
+      </div>
+      <div class="form-group">
+        <label>CNPJ/CPF</label>
+        <input type="text" name="cnpjCpf">
+      </div>
+      <div class="form-group">
+        <label>Centro de Custo</label>
+        <input type="text" name="centroCusto">
+      </div>
+      <div class="form-group">
+        <label>Requisitante</label>
+        <input type="text" name="requisitante">
+      </div>
+      <div class="form-group">
+        <label>Prazo (dias)</label>
+        <input type="number" name="prazoPrevisto" value="30" min="1">
+      </div>
+      <div class="form-group">
+        <label>Estrutura</label>
+        <input type="text" name="estrutura">
+      </div>
+      <div class="form-group">
+        <label>Observacoes</label>
+        <textarea name="observacoes"></textarea>
+      </div>
+      <div class="btn-group">
+        <button type="button" class="btn btn-primary" onclick="salvarProcesso()">Salvar</button>
+        <button type="button" class="btn btn-secondary" onclick="hideProcessoForm()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+var editingProcessoId = null;
+
+function initProcessosPanel(mode) {
+  // Carregar opções dos dropdowns
+  callServer('getFormOptions').then(function(opts) {
+    populateSelect('proc-tipo', opts.tiposContratacao);
+    populateSelect('proc-nat-terceiro', opts.naturezasTerceiro);
+    populateSelect('proc-nat-contratacao', opts.naturezasContratacao);
+    populateSelect('proc-forma', opts.formasContratacao);
+  });
+
+  if (mode === 'novo') {
+    showProcessoForm();
+  } else {
+    buscarProcessos();
+  }
+}
+
+function populateSelect(id, options) {
+  var sel = document.getElementById(id);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Selecione...</option>';
+  options.forEach(function(opt) {
+    sel.innerHTML += '<option value="' + opt + '">' + opt + '</option>';
+  });
+}
+
+function buscarProcessos() {
+  var busca = document.getElementById('proc-search').value;
+  var status = document.getElementById('proc-filter-status').value;
+  var filters = {};
+  if (busca) filters.busca = busca;
+  if (status) filters.status = status;
+
+  callServer('consultarProcessos', filters).then(function(result) {
+    if (!result.success) {
+      showToast(result.message, 'error');
+      return;
+    }
+    renderProcessosList(result.data);
+  });
+}
+
+function renderProcessosList(processos) {
+  var container = document.getElementById('proc-results');
+  if (processos.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhum processo encontrado.</p></div>';
+    return;
+  }
+
+  var html = '<table class="data-table"><thead><tr>'
+    + '<th>ID</th><th>Status</th><th>Etapa</th><th>Descricao</th><th>Dias</th><th>Acoes</th>'
+    + '</tr></thead><tbody>';
+
+  processos.forEach(function(p) {
+    html += '<tr>'
+      + '<td class="clickable" onclick="verProcesso(\\'' + p.id + '\\')">' + p.id + '</td>'
+      + '<td>' + statusBadge(p.statusGeral) + '</td>'
+      + '<td class="text-small">' + (p.etapaAtual || '-') + '</td>'
+      + '<td class="text-small">' + (p.descricao || '').substring(0, 40) + '</td>'
+      + '<td>' + p.diasAberto + '</td>'
+      + '<td>'
+      + '<button class="btn btn-sm btn-secondary" onclick="editarProc(\\'' + p.id + '\\')">Editar</button> '
+      + '<button class="btn btn-sm btn-primary" onclick="verEtapas(\\'' + p.id + '\\')">Etapas</button>'
+      + '</td></tr>';
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function showProcessoForm() {
+  editingProcessoId = null;
+  document.getElementById('proc-form-title').textContent = 'Novo Processo';
+  document.getElementById('proc-form-id').value = '';
+  resetForm('proc-form');
+  document.getElementById('processos-view-consulta').classList.add('hidden');
+  document.getElementById('processos-view-form').classList.remove('hidden');
+}
+
+function hideProcessoForm() {
+  document.getElementById('processos-view-form').classList.add('hidden');
+  document.getElementById('processos-view-consulta').classList.remove('hidden');
+}
+
+function salvarProcesso() {
+  var data = collectFormData('proc-form');
+  if (editingProcessoId) {
+    callServer('editarProcesso', editingProcessoId, data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideProcessoForm(); buscarProcessos(); }
+    });
+  } else {
+    callServer('criarProcesso', data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideProcessoForm(); buscarProcessos(); }
+    });
+  }
+}
+
+function editarProc(id) {
+  callServer('getProcessoParaEdicao', id).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    editingProcessoId = id;
+    document.getElementById('proc-form-title').textContent = 'Editar Processo ' + id;
+    document.getElementById('proc-form-id').value = id;
+    fillFormData('proc-form', result.data);
+    document.getElementById('processos-view-consulta').classList.add('hidden');
+    document.getElementById('processos-view-form').classList.remove('hidden');
+  });
+}
+
+function verProcesso(id) {
+  callServer('consultarProcessoPorId', id).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    var p = result.data;
+    var html = '<div class="card">'
+      + '<div class="card-title">' + p.id + ' - ' + p.descricao + '</div>'
+      + '<p>' + statusBadge(p.statusGeral) + ' | Etapa: ' + (p.etapaAtual || '-') + '</p>'
+      + '<table class="data-table mt-8">'
+      + '<tr><td><strong>Tipo</strong></td><td>' + p.tipoContratacao + '</td></tr>'
+      + '<tr><td><strong>Nat. Terceiro</strong></td><td>' + p.naturezaTerceiro + '</td></tr>'
+      + '<tr><td><strong>Nat. Contratacao</strong></td><td>' + p.naturezaContratacao + '</td></tr>'
+      + '<tr><td><strong>Forma</strong></td><td>' + p.formaContratacao + '</td></tr>'
+      + '<tr><td><strong>Valor</strong></td><td>R$ ' + (p.valorEstimado || 0) + '</td></tr>'
+      + '<tr><td><strong>Fornecedor</strong></td><td>' + (p.fornecedor || '-') + '</td></tr>'
+      + '<tr><td><strong>Abertura</strong></td><td>' + (p.dataAbertura || '-') + '</td></tr>'
+      + '<tr><td><strong>Prazo</strong></td><td>' + (p.prazoPrevisto || '-') + '</td></tr>'
+      + '<tr><td><strong>Dias Aberto</strong></td><td>' + p.diasAberto + '</td></tr>'
+      + '</table>'
+      + '<div class="btn-group mt-8">'
+      + '<button class="btn btn-primary btn-sm" onclick="verEtapas(\\'' + p.id + '\\')">Ver Etapas</button>'
+      + '<button class="btn btn-secondary btn-sm" onclick="editarProc(\\'' + p.id + '\\')">Editar</button>'
+      + '<button class="btn btn-secondary btn-sm" onclick="buscarProcessos();hideProcessoForm()">Voltar</button>'
+      + '</div></div>';
+    document.getElementById('proc-results').innerHTML = html;
+  });
+}
+
+function verEtapas(id) {
+  navigateTo('etapas', { processoId: id });
+}
+</script>
+`;
+}
+
+/**
+ * Retorna HTML do painel de fornecedores.
+ * @returns {string}
+ */
+function getPanelFornecedores() {
+  return `<!-- Painel de Fornecedores -->
+<div id="forn-view-consulta">
+  <div class="card">
+    <div class="card-title">Fornecedores</div>
+    <div class="btn-group mb-8">
+      <button class="btn btn-primary btn-sm" onclick="showFornecedorForm()">Novo Fornecedor</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="forn-search" placeholder="Buscar por razao social ou CNPJ/CPF..." onkeyup="if(event.key==='Enter')buscarFornecedores()">
+      <button class="btn btn-secondary btn-sm" onclick="buscarFornecedores()">Buscar</button>
+    </div>
+  </div>
+  <div id="forn-results"></div>
+</div>
+
+<div id="forn-view-form" class="hidden">
+  <div class="card">
+    <div class="card-title" id="forn-form-title">Novo Fornecedor</div>
+    <form id="forn-form">
+      <input type="hidden" name="originalCnpjCpf" id="forn-original-doc">
+      <div class="form-group">
+        <label>CNPJ/CPF *</label>
+        <input type="text" name="cnpjCpf" required id="forn-doc">
+      </div>
+      <div class="form-group">
+        <label>Razao Social *</label>
+        <input type="text" name="razaoSocial" required>
+      </div>
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select name="tipo" required>
+          <option value="">Selecione...</option>
+          <option value="Pessoa Juridica">Pessoa Juridica</option>
+          <option value="Pessoa Fisica">Pessoa Fisica</option>
+          <option value="Organismo Internacional">Organismo Internacional</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Contato</label>
+        <input type="text" name="contato">
+      </div>
+      <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" name="email">
+      </div>
+      <div class="form-group">
+        <label>Telefone</label>
+        <input type="text" name="telefone">
+      </div>
+      <div class="form-group">
+        <label>Dados Bancarios</label>
+        <textarea name="dadosBancarios"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Observacoes</label>
+        <textarea name="observacoes"></textarea>
+      </div>
+      <div class="btn-group">
+        <button type="button" class="btn btn-primary" onclick="salvarFornecedor()">Salvar</button>
+        <button type="button" class="btn btn-secondary" onclick="hideFornecedorForm()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+var editingFornecedor = null;
+
+function initFornecedoresPanel(mode) {
+  if (mode === 'novo') {
+    showFornecedorForm();
+  } else {
+    buscarFornecedores();
+  }
+}
+
+function buscarFornecedores() {
+  var busca = document.getElementById('forn-search').value;
+  var filters = {};
+  if (busca) filters.busca = busca;
+
+  callServer('consultarFornecedores', filters).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderFornecedoresList(result.data);
+  });
+}
+
+function renderFornecedoresList(fornecedores) {
+  var container = document.getElementById('forn-results');
+  if (fornecedores.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhum fornecedor encontrado.</p></div>';
+    return;
+  }
+
+  var html = '<table class="data-table"><thead><tr>'
+    + '<th>CNPJ/CPF</th><th>Razao Social</th><th>Tipo</th><th>Cadastro</th><th>Credenciamento</th><th>Acoes</th>'
+    + '</tr></thead><tbody>';
+
+  fornecedores.forEach(function(f) {
+    html += '<tr>'
+      + '<td class="text-small">' + f.cnpjCpf + '</td>'
+      + '<td>' + f.razaoSocial + '</td>'
+      + '<td class="text-small">' + (f.tipo || '-') + '</td>'
+      + '<td>' + statusBadge(f.statusCadastro || 'Pendente') + '</td>'
+      + '<td>' + statusBadge(f.statusCredenciamento || 'Pendente') + '</td>'
+      + '<td><button class="btn btn-sm btn-secondary" onclick="editarForn(\\'' + f.cnpjCpf + '\\')">Editar</button></td>'
+      + '</tr>';
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function showFornecedorForm() {
+  editingFornecedor = null;
+  document.getElementById('forn-form-title').textContent = 'Novo Fornecedor';
+  document.getElementById('forn-original-doc').value = '';
+  document.getElementById('forn-doc').disabled = false;
+  resetForm('forn-form');
+  document.getElementById('forn-view-consulta').classList.add('hidden');
+  document.getElementById('forn-view-form').classList.remove('hidden');
+}
+
+function hideFornecedorForm() {
+  document.getElementById('forn-view-form').classList.add('hidden');
+  document.getElementById('forn-view-consulta').classList.remove('hidden');
+}
+
+function salvarFornecedor() {
+  var data = collectFormData('forn-form');
+  if (editingFornecedor) {
+    callServer('editarFornecedor', editingFornecedor, data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideFornecedorForm(); buscarFornecedores(); }
+    });
+  } else {
+    callServer('criarFornecedor', data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideFornecedorForm(); buscarFornecedores(); }
+    });
+  }
+}
+
+function editarForn(cnpjCpf) {
+  callServer('consultarFornecedorPorCnpj', cnpjCpf).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    editingFornecedor = cnpjCpf;
+    document.getElementById('forn-form-title').textContent = 'Editar Fornecedor';
+    document.getElementById('forn-original-doc').value = cnpjCpf;
+    document.getElementById('forn-doc').disabled = true;
+    fillFormData('forn-form', result.data);
+    document.getElementById('forn-view-consulta').classList.add('hidden');
+    document.getElementById('forn-view-form').classList.remove('hidden');
+  });
+}
+</script>
+`;
+}
+
+/**
+ * Retorna HTML do painel de etapas.
+ * @returns {string}
+ */
+function getPanelEtapas() {
+  return `<!-- Painel de Etapas (Timeline) -->
+<div class="card">
+  <div class="card-title" id="etapas-title">Etapas do Processo</div>
+  <p class="text-small text-muted" id="etapas-subtitle"></p>
+</div>
+<div id="etapas-timeline"></div>
+<div class="btn-group mt-8">
+  <button class="btn btn-secondary btn-sm" onclick="navigateTo('processos')">Voltar para Processos</button>
+</div>
+
+<script>
+var currentProcessoId = null;
+
+function initEtapasPanel(params) {
+  if (params && params.processoId) {
+    currentProcessoId = params.processoId;
+    document.getElementById('etapas-title').textContent = 'Etapas — ' + params.processoId;
+    carregarEtapas(params.processoId);
+  } else {
+    document.getElementById('etapas-timeline').innerHTML =
+      '<div class="card text-center"><p class="text-muted">Selecione um processo para ver as etapas.</p></div>';
+  }
+}
+
+function carregarEtapas(processoId) {
+  callServer('consultarEtapas', processoId).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderTimeline(result.data);
+  });
+}
+
+function renderTimeline(etapas) {
+  var container = document.getElementById('etapas-timeline');
+
+  if (etapas.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhuma etapa encontrada.</p></div>';
+    return;
+  }
+
+  var html = '<ul class="timeline">';
+
+  etapas.forEach(function(e) {
+    var itemClass = '';
+    if (e.status === 'Em Andamento') itemClass = 'active';
+    else if (e.status === 'Concluido') itemClass = 'done';
+    else if (e.status === 'N/A') itemClass = 'na';
+
+    var dataInfo = '';
+    if (e.dataInicio) {
+      var dt = e.dataInicio instanceof Date ? e.dataInicio : new Date(e.dataInicio);
+      dataInfo += 'Inicio: ' + (dt.toLocaleDateString ? dt.toLocaleDateString('pt-BR') : e.dataInicio);
+    }
+    if (e.dataConclusao) {
+      var dc = e.dataConclusao instanceof Date ? e.dataConclusao : new Date(e.dataConclusao);
+      dataInfo += ' | Conclusao: ' + (dc.toLocaleDateString ? dc.toLocaleDateString('pt-BR') : e.dataConclusao);
+    }
+    if (e.prazoLimite) {
+      var pl = e.prazoLimite instanceof Date ? e.prazoLimite : new Date(e.prazoLimite);
+      dataInfo += ' | Prazo: ' + (pl.toLocaleDateString ? pl.toLocaleDateString('pt-BR') : e.prazoLimite);
+    }
+
+    html += '<li class="timeline-item ' + itemClass + '">'
+      + '<div class="tl-title">' + e.num + '. ' + e.etapa + '</div>'
+      + '<div class="tl-meta">'
+      + statusBadge(e.status) + ' | Resp: ' + e.responsavel
+      + '</div>';
+
+    if (dataInfo) {
+      html += '<div class="tl-meta">' + dataInfo + '</div>';
+    }
+
+    if (e.documentoRef) {
+      html += '<div class="tl-meta">Doc: ' + e.documentoRef + '</div>';
+    }
+
+    if (e.observacoes) {
+      html += '<div class="tl-meta">Obs: ' + e.observacoes + '</div>';
+    }
+
+    // Botão de concluir etapa (apenas para etapas Em Andamento)
+    if (e.status === 'Em Andamento') {
+      html += '<div class="mt-8">'
+        + '<button class="btn btn-success btn-sm" onclick="concluirEtapaUI(' + e.num + ')">Concluir Etapa</button> '
+        + '<button class="btn btn-secondary btn-sm" onclick="editarEtapaUI(' + e.num + ')">Editar</button>'
+        + '</div>';
+    }
+
+    html += '</li>';
+  });
+
+  html += '</ul>';
+  container.innerHTML = html;
+}
+
+function concluirEtapaUI(etapaNum) {
+  if (!currentProcessoId) return;
+
+  callServer('concluirEtapa', currentProcessoId, etapaNum).then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+    if (result.success) {
+      carregarEtapas(currentProcessoId);
+    }
+  });
+}
+
+function editarEtapaUI(etapaNum) {
+  if (!currentProcessoId) return;
+
+  var prazo = prompt('Prazo Limite (dd/mm/aaaa):');
+  var docRef = prompt('Documento Referencia:');
+  var obs = prompt('Observacoes:');
+
+  var updates = {};
+  if (prazo) {
+    var parts = prazo.split('/');
+    if (parts.length === 3) {
+      updates.prazoLimite = new Date(parts[2], parts[1] - 1, parts[0]);
+    }
+  }
+  if (docRef) updates.documentoRef = docRef;
+  if (obs) updates.observacoes = obs;
+
+  if (Object.keys(updates).length === 0) {
+    showToast('Nenhuma alteracao informada.', 'warning');
+    return;
+  }
+
+  callServer('atualizarEtapa', currentProcessoId, etapaNum, updates).then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+    if (result.success) {
+      carregarEtapas(currentProcessoId);
+    }
+  });
+}
+</script>
+`;
+}
+
+/**
+ * Retorna HTML do painel do dashboard.
+ * @returns {string}
+ */
+function getPanelDashboard() {
+  return `<!-- Painel do Dashboard -->
+<div class="card">
+  <div class="card-title">Dashboard</div>
+  <button class="btn btn-secondary btn-sm" onclick="atualizarDashboard()">Atualizar Agora</button>
+</div>
+
+<div id="dashboard-kpis"></div>
+<div id="dashboard-tables"></div>
+
+<script>
+function initDashboardPanel() {
+  carregarDashboard();
+}
+
+function carregarDashboard() {
+  callServer('getDashboardData').then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderDashboard(result.data);
+  });
+}
+
+function renderDashboard(kpis) {
+  // KPIs em cards
+  var kpiHtml = '<div class="kpi-grid">'
+    + kpiCard(kpis.totalProcessos, 'Total Processos')
+    + kpiCard(kpis.emAndamento, 'Em Andamento')
+    + kpiCard(kpis.concluidos, 'Concluidos')
+    + kpiCard(kpis.cancelados, 'Cancelados')
+    + kpiCard(kpis.suspensos, 'Suspensos')
+    + kpiCard(kpis.mediadiasAberto, 'Media Dias Aberto')
+    + '</div>';
+  document.getElementById('dashboard-kpis').innerHTML = kpiHtml;
+
+  // Tabelas
+  var tablesHtml = '';
+
+  // Por tipo de contratação
+  var tipos = Object.keys(kpis.porTipo || {});
+  if (tipos.length > 0) {
+    tablesHtml += '<div class="card"><div class="card-title">Por Tipo de Contratacao</div>'
+      + '<table class="data-table"><thead><tr><th>Tipo</th><th>Qtd</th></tr></thead><tbody>';
+    tipos.forEach(function(t) {
+      tablesHtml += '<tr><td>' + t + '</td><td>' + kpis.porTipo[t] + '</td></tr>';
+    });
+    tablesHtml += '</tbody></table></div>';
+  }
+
+  // Por etapa atual
+  var etapas = Object.keys(kpis.porEtapaAtual || {});
+  if (etapas.length > 0) {
+    tablesHtml += '<div class="card"><div class="card-title">Por Etapa Atual (Em Andamento)</div>'
+      + '<table class="data-table"><thead><tr><th>Etapa</th><th>Qtd</th></tr></thead><tbody>';
+    etapas.forEach(function(e) {
+      tablesHtml += '<tr><td class="text-small">' + e + '</td><td>' + kpis.porEtapaAtual[e] + '</td></tr>';
+    });
+    tablesHtml += '</tbody></table></div>';
+  }
+
+  // Volume mensal
+  var meses = Object.keys(kpis.volumeMensal || {}).sort();
+  if (meses.length > 0) {
+    tablesHtml += '<div class="card"><div class="card-title">Volume Mensal</div>'
+      + '<table class="data-table"><thead><tr><th>Mes/Ano</th><th>Qtd</th></tr></thead><tbody>';
+    meses.forEach(function(m) {
+      tablesHtml += '<tr><td>' + m + '</td><td>' + kpis.volumeMensal[m] + '</td></tr>';
+    });
+    tablesHtml += '</tbody></table></div>';
+  }
+
+  document.getElementById('dashboard-tables').innerHTML = tablesHtml;
+}
+
+function kpiCard(value, label) {
+  return '<div class="kpi-card"><div class="kpi-value">' + value + '</div>'
+    + '<div class="kpi-label">' + label + '</div></div>';
+}
+
+function atualizarDashboard() {
+  callServer('refreshDashboard').then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+    if (result.success) carregarDashboard();
+  });
+}
+</script>
+`;
+}
+
+/**
+ * Retorna HTML do painel de alertas.
+ * @returns {string}
+ */
+function getPanelAlertas() {
+  return `<!-- Painel de Alertas -->
+<div class="card">
+  <div class="card-title">Alertas Ativos</div>
+  <button class="btn btn-secondary btn-sm" onclick="carregarAlertas()">Atualizar</button>
+</div>
+<div id="alertas-list"></div>
+
+<div class="card mt-12">
+  <div class="card-title">Configuracao de Alertas</div>
+  <form id="alertas-config-form">
+    <div class="form-group">
+      <label>Destinatarios (emails separados por virgula)</label>
+      <textarea name="recipients" id="alert-recipients" rows="2"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Dias antes do vencimento para alertar</label>
+      <input type="number" name="overdueWarningDays" id="alert-warning-days" min="1" value="3">
+    </div>
+    <div class="form-group">
+      <label>Dias sem movimentacao (processo parado)</label>
+      <input type="number" name="staleDays" id="alert-stale-days" min="1" value="15">
+    </div>
+    <div class="form-group">
+      <label>Dias antes do vencimento de credenciamento</label>
+      <input type="number" name="credentialWarningDays" id="alert-cred-days" min="1" value="30">
+    </div>
+    <div class="btn-group">
+      <button type="button" class="btn btn-primary btn-sm" onclick="salvarConfigAlerta()">Salvar Configuracao</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="executarAlertasManual()">Executar Alertas Agora</button>
+    </div>
+  </form>
+</div>
+
+<script>
+function initAlertasPanel() {
+  carregarAlertas();
+  carregarConfigAlertas();
+}
+
+function carregarAlertas() {
+  callServer('getAlertasAtivos').then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderAlertas(result.data);
+  });
+}
+
+function renderAlertas(alertas) {
+  var container = document.getElementById('alertas-list');
+  if (alertas.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted text-small">Nenhum alerta ativo.</p></div>';
+    return;
+  }
+
+  var html = '';
+  alertas.forEach(function(a) {
+    var isWarning = a.alerta.indexOf('PROXIMO') !== -1 || a.alerta.indexOf('VENCENDO') !== -1;
+    html += '<div class="alert-item' + (isWarning ? ' warning' : '') + '">'
+      + '<strong>' + a.processo + '</strong> — ' + (a.descricao || '') + '<br>'
+      + '<span class="text-small">' + a.alerta + '</span>'
+      + '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function carregarConfigAlertas() {
+  callServer('getConfigAlertas').then(function(config) {
+    document.getElementById('alert-recipients').value = config.recipients || '';
+    document.getElementById('alert-warning-days').value = config.thresholds.overdueWarningDays || 3;
+    document.getElementById('alert-stale-days').value = config.thresholds.staleDays || 15;
+    document.getElementById('alert-cred-days').value = config.thresholds.credentialWarningDays || 30;
+  });
+}
+
+function salvarConfigAlerta() {
+  var config = {
+    recipients: document.getElementById('alert-recipients').value,
+    thresholds: {
+      overdueWarningDays: parseInt(document.getElementById('alert-warning-days').value, 10),
+      staleDays: parseInt(document.getElementById('alert-stale-days').value, 10),
+      credentialWarningDays: parseInt(document.getElementById('alert-cred-days').value, 10)
+    }
+  };
+
+  callServer('salvarConfigAlertas', config).then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+  });
+}
+
+function executarAlertasManual() {
+  callServer('executarAlertasDiarios').then(function() {
+    showToast('Alertas executados com sucesso.', 'success');
+    carregarAlertas();
+  }).catch(function() {
+    showToast('Erro ao executar alertas.', 'error');
+  });
+}
+</script>
+`;
+}
+
+/**
+ * Retorna HTML do painel de configuracao.
+ * @returns {string}
+ */
+function getPanelConfig() {
+  return `<!-- Painel de Configuracao -->
+<div class="card">
+  <div class="card-title">Configuracao do Sistema</div>
+  <p class="text-small text-muted">Workflow DINT / FGV v2.0</p>
+</div>
+
+<div class="card">
+  <div class="card-title">Normativos Implementados</div>
+  <ul id="normativos-list" style="padding-left:16px;font-size:12px;"></ul>
+</div>
+
+<div class="card">
+  <div class="card-title">Triggers Automaticos</div>
+  <p class="text-small text-muted mb-8">
+    Instale os triggers para ativar alertas diarios, relatorios semanais
+    e atualizacao automatica do dashboard.
+  </p>
+  <div class="btn-group">
+    <button class="btn btn-primary btn-sm" onclick="instalarTriggers()">Instalar Triggers</button>
+    <button class="btn btn-danger btn-sm" onclick="removerTriggers()">Remover Triggers</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Acoes do Sistema</div>
+  <div class="btn-group" style="flex-wrap:wrap;">
+    <button class="btn btn-secondary btn-sm" onclick="atualizarDashboardConfig()">Atualizar Dashboard</button>
+    <button class="btn btn-secondary btn-sm" onclick="executarAlertasConfig()">Executar Alertas</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Log de Acoes</div>
+  <div class="form-group">
+    <select id="log-filter-acao" style="padding:6px;font-size:12px;">
+      <option value="">Todas as acoes</option>
+      <option value="CRIAR_PROCESSO">Criar Processo</option>
+      <option value="EDITAR_PROCESSO">Editar Processo</option>
+      <option value="CANCELAR_PROCESSO">Cancelar Processo</option>
+      <option value="CONCLUIR_ETAPA">Concluir Etapa</option>
+      <option value="CRIAR_FORNECEDOR">Criar Fornecedor</option>
+      <option value="ERROR">Erros</option>
+      <option value="LOCK_FAILURE">Falhas de Lock</option>
+    </select>
+  </div>
+  <button class="btn btn-secondary btn-sm mb-8" onclick="consultarLogConfig()">Consultar Log</button>
+  <div id="log-results"></div>
+</div>
+
+<script>
+function initConfigPanel() {
+  // Listar normativos
+  var normativos = ['NP AC.03.004', 'NP AC.03.006', 'NP AC.03.002', 'NP AF.03.003', 'Portaria 24/2024'];
+  var list = document.getElementById('normativos-list');
+  normativos.forEach(function(n) {
+    list.innerHTML += '<li>' + n + '</li>';
+  });
+}
+
+function instalarTriggers() {
+  callServer('installTriggers').then(function() {
+    showToast('Triggers instalados com sucesso.', 'success');
+  });
+}
+
+function removerTriggers() {
+  callServer('removeTriggers').then(function() {
+    showToast('Triggers removidos.', 'success');
+  });
+}
+
+function atualizarDashboardConfig() {
+  callServer('refreshDashboard').then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+  });
+}
+
+function executarAlertasConfig() {
+  callServer('executarAlertasDiarios').then(function() {
+    showToast('Alertas executados.', 'success');
+  });
+}
+
+function consultarLogConfig() {
+  var acao = document.getElementById('log-filter-acao').value;
+  var filters = {};
+  if (acao) filters.acao = acao;
+  filters.limite = 50;
+
+  callServer('consultarLog', filters).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderLog(result.data);
+  });
+}
+
+function renderLog(entries) {
+  var container = document.getElementById('log-results');
+  if (entries.length === 0) {
+    container.innerHTML = '<p class="text-muted text-small">Nenhum registro encontrado.</p>';
+    return;
+  }
+
+  var html = '<table class="data-table"><thead><tr>'
+    + '<th>Data/Hora</th><th>Usuario</th><th>Acao</th><th>Detalhes</th>'
+    + '</tr></thead><tbody>';
+
+  entries.forEach(function(e) {
+    html += '<tr>'
+      + '<td class="text-small">' + e.dataHora + '</td>'
+      + '<td class="text-small">' + e.usuario + '</td>'
+      + '<td class="text-small">' + e.acao + '</td>'
+      + '<td class="text-small">' + (e.detalhes || '').substring(0, 60) + '</td>'
+      + '</tr>';
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+</script>
+`;
+}
