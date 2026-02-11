@@ -816,9 +816,42 @@ document.addEventListener('DOMContentLoaded', function() {
         <label>Forma de Contratacao *</label>
         <select name="formaContratacao" required id="proc-forma"></select>
       </div>
+
+      <!-- Campos normativos (Resumo Normas Contratações Terceiros) -->
+      <div style="border:1px solid #3949ab;border-radius:6px;padding:10px;margin:10px 0;background:#e8eaf6;">
+        <div style="font-weight:600;color:#3949ab;font-size:13px;margin-bottom:8px;">Classificacao Normativa (Resumo Normas)</div>
+        <div class="form-group">
+          <label>Tipo de Servico *</label>
+          <select name="tipoServico" required id="proc-tipo-servico" onchange="previewRequisitos()"></select>
+        </div>
+        <div class="form-group">
+          <label>PAR *</label>
+          <select name="par" required id="proc-par" onchange="previewRequisitos()">
+            <option value="">Selecione...</option>
+            <option value="Sem PAR">Sem PAR (contratacao propria FGV)</option>
+            <option value="Com PAR">Com PAR (projeto com cliente)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Duracao do Contrato *</label>
+          <select name="duracao" required id="proc-duracao" onchange="previewRequisitos()">
+            <option value="">Selecione...</option>
+            <option value="Imediata">Imediata (&lt; 90 dias)</option>
+            <option value="Prolongada">Prolongada (>= 90 dias)</option>
+          </select>
+        </div>
+      </div>
+
       <div class="form-group">
         <label>Valor Estimado (R$) *</label>
-        <input type="number" name="valorEstimado" step="0.01" min="0.01" required>
+        <input type="number" name="valorEstimado" step="0.01" min="0.01" required onchange="previewRequisitos()">
+      </div>
+
+      <!-- Preview de requisitos normativos -->
+      <div id="proc-normas-preview" class="hidden" style="border:1px solid #43a047;border-radius:6px;padding:10px;margin:10px 0;background:#e8f5e9;">
+        <div style="font-weight:600;color:#2e7d32;font-size:12px;margin-bottom:6px;">Exigencias normativas (secao <span id="norma-secao">-</span>)</div>
+        <div id="norma-obrigatorios" style="font-size:11px;color:#1b5e20;"></div>
+        <div id="norma-dispensaveis" style="font-size:11px;color:#757575;margin-top:4px;"></div>
       </div>
       <div class="form-group">
         <label>Fornecedor</label>
@@ -860,12 +893,13 @@ document.addEventListener('DOMContentLoaded', function() {
 var editingProcessoId = null;
 
 function initProcessosPanel(mode) {
-  // Carregar opções dos dropdowns
+  // Carregar opções dos dropdowns (incluindo novos campos normativos)
   callServer('getFormOptions').then(function(opts) {
     populateSelect('proc-tipo', opts.tiposContratacao);
     populateSelect('proc-nat-terceiro', opts.naturezasTerceiro);
     populateSelect('proc-nat-contratacao', opts.naturezasContratacao);
     populateSelect('proc-forma', opts.formasContratacao);
+    populateSelect('proc-tipo-servico', opts.tiposServico || []);
   });
 
   if (mode === 'novo') {
@@ -873,6 +907,47 @@ function initProcessosPanel(mode) {
   } else {
     buscarProcessos();
   }
+}
+
+// Preview de requisitos normativos em tempo real
+function previewRequisitos() {
+  var tipoServico = document.querySelector('[name="tipoServico"]').value;
+  var par = document.querySelector('[name="par"]').value;
+  var duracao = document.querySelector('[name="duracao"]').value;
+  var valor = parseFloat(document.querySelector('[name="valorEstimado"]').value) || 0;
+  var previewDiv = document.getElementById('proc-normas-preview');
+
+  if (!tipoServico || !par || !duracao || valor <= 0) {
+    previewDiv.classList.add('hidden');
+    return;
+  }
+
+  callServer('previewRequisitosNormativos', {
+    tipoServico: tipoServico, par: par, duracao: duracao, valorEstimado: valor
+  }).then(function(result) {
+    document.getElementById('norma-secao').textContent = result.secao || 'N/D';
+
+    var obrigHtml = result.obrigatorios && result.obrigatorios.length > 0
+      ? '<strong>OBRIGATORIOS:</strong> ' + result.obrigatorios.join(', ')
+      : '<strong>Nenhuma exigencia obrigatoria</strong>';
+    document.getElementById('norma-obrigatorios').innerHTML = obrigHtml;
+
+    var dispHtml = result.dispensaveis && result.dispensaveis.length > 0
+      ? '<em>Dispensaveis:</em> ' + result.dispensaveis.join(', ')
+      : '';
+    document.getElementById('norma-dispensaveis').innerHTML = dispHtml;
+
+    if (!result.found) {
+      previewDiv.style.borderColor = '#e65100';
+      previewDiv.style.background = '#fff3e0';
+      document.getElementById('norma-obrigatorios').innerHTML += '<br><span style="color:#e65100;">ATENCAO: Combinacao nao encontrada na matriz. Todas as exigencias ativadas por precaucao.</span>';
+    } else {
+      previewDiv.style.borderColor = '#43a047';
+      previewDiv.style.background = '#e8f5e9';
+    }
+
+    previewDiv.classList.remove('hidden');
+  });
 }
 
 function populateSelect(id, options) {
@@ -1221,8 +1296,19 @@ function renderTimeline(etapas) {
       dataInfo += ' | Prazo: ' + (pl.toLocaleDateString ? pl.toLocaleDateString('pt-BR') : e.prazoLimite);
     }
 
+    // Badge normativo: etapas controladas pela matriz mostram obrigatório/dispensável
+    var normaBadge = '';
+    var etapasObrigatorias = [3,4,5,6,7,8,9,10]; // Etapas controladas por flags normativos
+    if (etapasObrigatorias.indexOf(e.num) !== -1) {
+      if (e.status === 'N/A') {
+        normaBadge = ' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:#e0e0e0;color:#616161;">Dispensavel</span>';
+      } else {
+        normaBadge = ' <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:#c8e6c9;color:#2e7d32;">Obrigatorio</span>';
+      }
+    }
+
     html += '<li class="timeline-item ' + itemClass + '">'
-      + '<div class="tl-title">' + e.num + '. ' + e.etapa + '</div>'
+      + '<div class="tl-title">' + e.num + '. ' + e.etapa + normaBadge + '</div>'
       + '<div class="tl-meta">'
       + statusBadge(e.status) + ' | Resp: ' + e.responsavel
       + '</div>';
@@ -1712,7 +1798,11 @@ var COL_PROC = {
   CONTRATO:              21,
   OBSERVACOES:           22,
   DIAS_ABERTO:           23,
-  ALERTAS:               24
+  ALERTAS:               24,
+  TIPO_SERVICO:          25,   // Tipo de serviço conforme Resumo Normas Contratações
+  PAR:                   26,   // Sem PAR / Com PAR
+  DURACAO_CONTRATO:      27,   // Imediata / Prolongada
+  CADASTRAMENTO:         28    // Flag Cadastramento (Obrigatório/N/A)
 };
 
 // ── Colunas da aba Fornecedores (1-based) ───────────────────
@@ -1791,12 +1881,14 @@ var STAGES = [
 ];
 
 // ── Mapeamento de flags de exigência para etapas ────────────
+// Conforme Resumo de Normas de Contratações de Terceiros
 var FLAG_TO_STAGE = {
-  coletaPrecos:    [6],
-  proposta:        [8],
-  credenciamento:  [4],
-  compliance:      [5],
-  contrato:        [9, 10]
+  cadastramento:  [3],        // Etapa 3: Cadastro do Terceiro (Portal)
+  credenciamento: [4],        // Etapa 4: Credenciamento do Terceiro
+  compliance:     [5],        // Etapa 5: Due Diligence (DCI)
+  mapaCotacao:    [6, 7],     // Etapa 6: Coleta de Preços + Etapa 7: Mapa de Cotação
+  proposta:       [8],        // Etapa 8: Proposta Comercial
+  contrato:       [9, 10]     // Etapa 9: Instrumento Contratual + Etapa 10: Assinatura
 };
 
 // ── Tipos e naturezas (enums de formulário) ─────────────────
@@ -1828,6 +1920,32 @@ var FORMAS_CONTRATACAO = [
   'Carta Acordo'
 ];
 
+// ── Tipos de serviço conforme Resumo Normas Contratações ────
+var TIPOS_SERVICO = [
+  'Aquisicao de bens de PJ',
+  'Servico tecnico por PF autonomo',
+  'Servico tecnico por PJ',
+  'Servico academico por PF autonomo',
+  'Servico academico por PJ',
+  'Servico administrativo por PF autonomo',
+  'Servico administrativo por PJ'
+];
+
+// ── Chaves curtas para a matriz normativa ───────────────────
+var TIPO_SERVICO_KEY = {
+  'Aquisicao de bens de PJ':               'BENS_PJ',
+  'Servico tecnico por PF autonomo':       'TEC_PF',
+  'Servico tecnico por PJ':                'TEC_PJ',
+  'Servico academico por PF autonomo':     'ACAD_PF',
+  'Servico academico por PJ':              'ACAD_PJ',
+  'Servico administrativo por PF autonomo':'ADM_PF',
+  'Servico administrativo por PJ':         'ADM_PJ'
+};
+
+// ── PAR e Duração ───────────────────────────────────────────
+var OPCOES_PAR = ['Sem PAR', 'Com PAR'];
+var OPCOES_DURACAO = ['Imediata', 'Prolongada'];
+
 // ── Configuração de Lock ────────────────────────────────────
 var CONFIG_LOCK = {
   TIMEOUT_MS:     30000,   // 30s max por tentativa
@@ -1835,7 +1953,16 @@ var CONFIG_LOCK = {
   RETRY_BASE_MS:  1000     // 1s backoff base
 };
 
-// ── Thresholds de regras normativas (ajustáveis) ────────────
+// ── Faixas de valor normativas ──────────────────────────────
+// Conforme Resumo de Normas de Contratações de Terceiros
+var FAIXAS_VALOR = [
+  { id: 1, min: 0,      max: 4999.99,   label: 'Ate R$4.999,99' },
+  { id: 2, min: 5000,    max: 24999.99,  label: 'R$5.000 a R$24.999,99' },
+  { id: 3, min: 25000,   max: 99999.99,  label: 'R$25.000 a R$99.999,99' },
+  { id: 4, min: 100000,  max: Infinity,  label: 'A partir de R$100.000' }
+];
+
+// ── Thresholds de regras normativas (legado, mantido p/ compatibilidade) ──
 var THRESHOLDS = {
   COLETA_PRECOS_VALOR:   17600,    // R$ 17.600
   PROPOSTA_VALOR:        50000,    // R$ 50.000
@@ -1858,6 +1985,210 @@ var NORMATIVES = [
   'NP AF.03.003',
   'Portaria 24/2024'
 ];
+
+// ══════════════════════════════════════════════════════════════
+// MATRIZ DE REQUISITOS NORMATIVOS
+// Conforme "Resumo de Normas de Contratações de Terceiros"
+// Chave: "PAR|DURACAO|FAIXA|TIPO_SERVICO_KEY"
+// Valor: { cad, cred, mapa, prop, comp, contr, secao }
+//   cad  = Cadastramento (Portal)
+//   cred = Credenciamento
+//   mapa = Mapa de Cotação
+//   prop = Proposta Comercial
+//   comp = Atendimento Compliance / Due Diligence (DCI)
+//   contr= Instrumento Contratual
+//   secao= Seção do Resumo Normativo
+// ══════════════════════════════════════════════════════════════
+
+var NORMAS_MATRIX = {};
+
+// ── Função auxiliar para popular a matriz ────────────────────
+function _m(par, dur, faixa, tipo, cad, cred, mapa, prop, comp, contr, secao) {
+  NORMAS_MATRIX[par + '|' + dur + '|' + faixa + '|' + tipo] = {
+    cad: cad, cred: cred, mapa: mapa, prop: prop, comp: comp, contr: contr,
+    secao: secao
+  };
+}
+
+// ┌─────────────────────────────────────────────────────────────┐
+// │ 1. CONTRATAÇÃO PRÓPRIA DA FGV (SEM PAR)                    │
+// └─────────────────────────────────────────────────────────────┘
+
+// ── 1.1 Imediata, < 90 dias (sem PAR) ───────────────────────
+
+// Seção 1.1.1 — Até R$4.999,99
+_m('SEM_PAR','IMEDIATA',1,'BENS_PJ', true,false,false,false,false,false,'1.1.1');
+_m('SEM_PAR','IMEDIATA',1,'TEC_PF',  true,false,false,false,false,false,'1.1.1');
+_m('SEM_PAR','IMEDIATA',1,'TEC_PJ',  true,false,false,false,false,false,'1.1.1');
+_m('SEM_PAR','IMEDIATA',1,'ACAD_PF', true,false,false,false,false,false,'1.1.1');
+_m('SEM_PAR','IMEDIATA',1,'ACAD_PJ', true,false,false,false,false,false,'1.1.1');
+_m('SEM_PAR','IMEDIATA',1,'ADM_PF',  true,false,false,false,false,false,'1.1.1');
+_m('SEM_PAR','IMEDIATA',1,'ADM_PJ',  true,false,false,false,false,false,'1.1.1');
+
+// Seção 1.1.2 — R$5.000 a R$24.999,99
+_m('SEM_PAR','IMEDIATA',2,'BENS_PJ', true,false,true, false,false,false,'1.1.2');
+_m('SEM_PAR','IMEDIATA',2,'TEC_PF',  true,false,true, false,false,false,'1.1.2');
+_m('SEM_PAR','IMEDIATA',2,'TEC_PJ',  true,false,true, false,false,false,'1.1.2');
+_m('SEM_PAR','IMEDIATA',2,'ACAD_PF', true,false,false,false,false,false,'1.1.2');
+_m('SEM_PAR','IMEDIATA',2,'ACAD_PJ', true,false,false,false,false,false,'1.1.2');
+_m('SEM_PAR','IMEDIATA',2,'ADM_PF',  true,false,true, false,false,false,'1.1.2');
+_m('SEM_PAR','IMEDIATA',2,'ADM_PJ',  true,false,true, false,false,false,'1.1.2');
+
+// Seção 1.1.3 — R$25.000 a R$99.999,99
+_m('SEM_PAR','IMEDIATA',3,'BENS_PJ', true,false,true, true, true, false,'1.1.3');
+_m('SEM_PAR','IMEDIATA',3,'TEC_PF',  true,true, true, true, true, false,'1.1.3');
+_m('SEM_PAR','IMEDIATA',3,'TEC_PJ',  true,true, true, true, true, false,'1.1.3');
+_m('SEM_PAR','IMEDIATA',3,'ACAD_PF', true,true, false,true, true, false,'1.1.3');
+_m('SEM_PAR','IMEDIATA',3,'ACAD_PJ', true,true, false,true, true, false,'1.1.3');
+_m('SEM_PAR','IMEDIATA',3,'ADM_PF',  true,false,true, true, true, false,'1.1.3');
+_m('SEM_PAR','IMEDIATA',3,'ADM_PJ',  true,false,true, true, true, false,'1.1.3');
+
+// Seção 1.1.4 — ≥ R$100.000
+_m('SEM_PAR','IMEDIATA',4,'BENS_PJ', true,false,true, true, true, false,'1.1.4');
+_m('SEM_PAR','IMEDIATA',4,'TEC_PF',  true,true, true, true, true, true, '1.1.4');
+_m('SEM_PAR','IMEDIATA',4,'TEC_PJ',  true,true, true, true, true, true, '1.1.4');
+_m('SEM_PAR','IMEDIATA',4,'ACAD_PF', true,true, false,true, true, true, '1.1.4');
+_m('SEM_PAR','IMEDIATA',4,'ACAD_PJ', true,true, false,true, true, true, '1.1.4');
+_m('SEM_PAR','IMEDIATA',4,'ADM_PF',  true,false,true, true, true, false,'1.1.4');
+_m('SEM_PAR','IMEDIATA',4,'ADM_PJ',  true,false,true, true, true, false,'1.1.4');
+
+// ── 1.2 Prolongada, ≥ 90 dias (sem PAR) ─────────────────────
+
+// Seção 1.2.1 — Até R$4.999,99
+_m('SEM_PAR','PROLONGADA',1,'BENS_PJ', true,false,false,false,false,false,'1.2.1');
+_m('SEM_PAR','PROLONGADA',1,'TEC_PF',  true,false,false,false,true, false,'1.2.1');
+_m('SEM_PAR','PROLONGADA',1,'TEC_PJ',  true,false,false,false,true, false,'1.2.1');
+_m('SEM_PAR','PROLONGADA',1,'ACAD_PF', true,false,false,false,true, false,'1.2.1');
+_m('SEM_PAR','PROLONGADA',1,'ACAD_PJ', true,false,false,false,true, false,'1.2.1');
+_m('SEM_PAR','PROLONGADA',1,'ADM_PF',  true,false,false,false,true, false,'1.2.1');
+_m('SEM_PAR','PROLONGADA',1,'ADM_PJ',  true,false,false,false,true, false,'1.2.1');
+
+// Seção 1.2.2 — R$5.000 a R$24.999,99
+_m('SEM_PAR','PROLONGADA',2,'BENS_PJ', true,false,true, false,false,false,'1.2.2');
+_m('SEM_PAR','PROLONGADA',2,'TEC_PF',  true,false,true, false,true, false,'1.2.2');
+_m('SEM_PAR','PROLONGADA',2,'TEC_PJ',  true,false,true, false,true, false,'1.2.2');
+_m('SEM_PAR','PROLONGADA',2,'ACAD_PF', true,false,false,false,true, false,'1.2.2');
+_m('SEM_PAR','PROLONGADA',2,'ACAD_PJ', true,false,false,false,true, false,'1.2.2');
+_m('SEM_PAR','PROLONGADA',2,'ADM_PF',  true,false,true, false,true, false,'1.2.2');
+_m('SEM_PAR','PROLONGADA',2,'ADM_PJ',  true,false,true, false,true, false,'1.2.2');
+
+// Seção 1.2.3 — R$25.000 a R$99.999,99
+_m('SEM_PAR','PROLONGADA',3,'BENS_PJ', true,true, true, true, true, false,'1.2.3');
+_m('SEM_PAR','PROLONGADA',3,'TEC_PF',  true,false,true, true, true, false,'1.2.3');
+_m('SEM_PAR','PROLONGADA',3,'TEC_PJ',  true,true, true, true, true, false,'1.2.3');
+_m('SEM_PAR','PROLONGADA',3,'ACAD_PF', true,true, false,true, true, false,'1.2.3');
+_m('SEM_PAR','PROLONGADA',3,'ACAD_PJ', true,true, false,true, true, false,'1.2.3');
+_m('SEM_PAR','PROLONGADA',3,'ADM_PF',  true,false,true, true, true, false,'1.2.3');
+_m('SEM_PAR','PROLONGADA',3,'ADM_PJ',  true,false,true, true, true, false,'1.2.3');
+
+// Seção 1.2.4 — ≥ R$100.000
+_m('SEM_PAR','PROLONGADA',4,'BENS_PJ', true,true, true, true, true, true, '1.2.4');
+_m('SEM_PAR','PROLONGADA',4,'TEC_PF',  true,false,true, true, true, true, '1.2.4');
+_m('SEM_PAR','PROLONGADA',4,'TEC_PJ',  true,true, true, true, true, true, '1.2.4');
+_m('SEM_PAR','PROLONGADA',4,'ACAD_PF', true,true, false,true, true, true, '1.2.4');
+_m('SEM_PAR','PROLONGADA',4,'ACAD_PJ', true,true, false,true, true, true, '1.2.4');
+_m('SEM_PAR','PROLONGADA',4,'ADM_PF',  true,false,true, true, true, true, '1.2.4');
+_m('SEM_PAR','PROLONGADA',4,'ADM_PJ',  true,true, true, true, true, true, '1.2.4');
+
+// ┌─────────────────────────────────────────────────────────────┐
+// │ 2. CONTRATAÇÃO EM PROJETOS COM CLIENTES (COM PAR)          │
+// └─────────────────────────────────────────────────────────────┘
+
+// ── 2.1 Imediata, < 90 dias (com PAR) ───────────────────────
+
+// Seção 2.1.1 — Até R$4.999,99
+_m('COM_PAR','IMEDIATA',1,'BENS_PJ', true,false,false,false,false,false,'2.1.1');
+_m('COM_PAR','IMEDIATA',1,'TEC_PF',  true,false,false,false,false,true, '2.1.1');
+_m('COM_PAR','IMEDIATA',1,'TEC_PJ',  true,false,false,false,false,true, '2.1.1');
+_m('COM_PAR','IMEDIATA',1,'ACAD_PF', true,false,false,false,false,true, '2.1.1');
+_m('COM_PAR','IMEDIATA',1,'ACAD_PJ', true,false,false,false,false,true, '2.1.1');
+_m('COM_PAR','IMEDIATA',1,'ADM_PF',  true,false,false,false,false,false,'2.1.1');
+_m('COM_PAR','IMEDIATA',1,'ADM_PJ',  true,false,false,false,false,false,'2.1.1');
+
+// Seção 2.1.2 — R$5.000 a R$24.999,99
+_m('COM_PAR','IMEDIATA',2,'BENS_PJ', true,false,true, true, false,false,'2.1.2');
+_m('COM_PAR','IMEDIATA',2,'TEC_PF',  true,false,true, true, false,true, '2.1.2');
+_m('COM_PAR','IMEDIATA',2,'TEC_PJ',  true,false,true, true, false,true, '2.1.2');
+_m('COM_PAR','IMEDIATA',2,'ACAD_PF', true,false,false,false,false,true, '2.1.2');
+_m('COM_PAR','IMEDIATA',2,'ACAD_PJ', true,false,false,false,false,true, '2.1.2');
+_m('COM_PAR','IMEDIATA',2,'ADM_PF',  true,false,true, true, false,false,'2.1.2');
+_m('COM_PAR','IMEDIATA',2,'ADM_PJ',  true,false,true, true, false,false,'2.1.2');
+
+// Seção 2.1.3 — R$25.000 a R$99.999,99
+_m('COM_PAR','IMEDIATA',3,'BENS_PJ', true,true, true, true, true, false,'2.1.3');
+_m('COM_PAR','IMEDIATA',3,'TEC_PF',  true,true, true, true, true, true, '2.1.3');
+_m('COM_PAR','IMEDIATA',3,'TEC_PJ',  true,true, true, true, true, true, '2.1.3');
+_m('COM_PAR','IMEDIATA',3,'ACAD_PF', true,true, false,true, true, true, '2.1.3');
+_m('COM_PAR','IMEDIATA',3,'ACAD_PJ', true,true, false,true, true, true, '2.1.3');
+_m('COM_PAR','IMEDIATA',3,'ADM_PF',  true,false,true, true, true, false,'2.1.3');
+_m('COM_PAR','IMEDIATA',3,'ADM_PJ',  true,false,true, true, true, false,'2.1.3');
+
+// Seção 2.1.4 — ≥ R$100.000
+_m('COM_PAR','IMEDIATA',4,'BENS_PJ', true,true, true, true, true, false,'2.1.4');
+_m('COM_PAR','IMEDIATA',4,'TEC_PF',  true,true, true, true, true, true, '2.1.4');
+_m('COM_PAR','IMEDIATA',4,'TEC_PJ',  true,true, true, true, true, true, '2.1.4');
+_m('COM_PAR','IMEDIATA',4,'ACAD_PF', true,true, false,true, true, true, '2.1.4');
+_m('COM_PAR','IMEDIATA',4,'ACAD_PJ', true,true, false,true, true, true, '2.1.4');
+_m('COM_PAR','IMEDIATA',4,'ADM_PF',  true,false,true, true, true, true, '2.1.4');
+_m('COM_PAR','IMEDIATA',4,'ADM_PJ',  true,true, true, true, true, true, '2.1.4');
+
+// ── 2.2 Prolongada, ≥ 90 dias (com PAR) ─────────────────────
+
+// Seção 2.2.1 — Até R$4.999,99
+_m('COM_PAR','PROLONGADA',1,'BENS_PJ', true,false,false,false,false,false,'2.2.1');
+_m('COM_PAR','PROLONGADA',1,'TEC_PF',  true,false,false,false,true, true, '2.2.1');
+_m('COM_PAR','PROLONGADA',1,'TEC_PJ',  true,false,false,false,true, true, '2.2.1');
+_m('COM_PAR','PROLONGADA',1,'ACAD_PF', true,false,false,false,true, true, '2.2.1');
+_m('COM_PAR','PROLONGADA',1,'ACAD_PJ', true,false,false,false,true, true, '2.2.1');
+_m('COM_PAR','PROLONGADA',1,'ADM_PF',  true,false,false,false,true, false,'2.2.1');
+_m('COM_PAR','PROLONGADA',1,'ADM_PJ',  true,false,false,false,true, false,'2.2.1');
+
+// Seção 2.2.2 — R$5.000 a R$24.999,99
+_m('COM_PAR','PROLONGADA',2,'BENS_PJ', true,false,true, true, false,false,'2.2.2');
+_m('COM_PAR','PROLONGADA',2,'TEC_PF',  true,false,true, true, true, true, '2.2.2');
+_m('COM_PAR','PROLONGADA',2,'TEC_PJ',  true,false,true, true, true, true, '2.2.2');
+_m('COM_PAR','PROLONGADA',2,'ACAD_PF', true,false,false,false,true, true, '2.2.2');
+_m('COM_PAR','PROLONGADA',2,'ACAD_PJ', true,false,false,false,true, true, '2.2.2');
+_m('COM_PAR','PROLONGADA',2,'ADM_PF',  true,false,true, true, true, false,'2.2.2');
+_m('COM_PAR','PROLONGADA',2,'ADM_PJ',  true,false,true, true, true, false,'2.2.2');
+
+// Seção 2.2.3 — R$25.000 a R$99.999,99
+_m('COM_PAR','PROLONGADA',3,'BENS_PJ', true,true, true, true, true, false,'2.2.3');
+_m('COM_PAR','PROLONGADA',3,'TEC_PF',  true,true, true, true, true, true, '2.2.3');
+_m('COM_PAR','PROLONGADA',3,'TEC_PJ',  true,true, true, true, true, true, '2.2.3');
+_m('COM_PAR','PROLONGADA',3,'ACAD_PF', true,true, false,true, true, true, '2.2.3');
+_m('COM_PAR','PROLONGADA',3,'ACAD_PJ', true,true, false,true, true, true, '2.2.3');
+_m('COM_PAR','PROLONGADA',3,'ADM_PF',  true,false,true, true, true, true, '2.2.3');
+_m('COM_PAR','PROLONGADA',3,'ADM_PJ',  true,true, true, true, true, true, '2.2.3');
+
+// Seção 2.2.4 — ≥ R$100.000
+_m('COM_PAR','PROLONGADA',4,'BENS_PJ', true,true, true, true, true, true, '2.2.4');
+_m('COM_PAR','PROLONGADA',4,'TEC_PF',  true,true, true, true, true, true, '2.2.4');
+_m('COM_PAR','PROLONGADA',4,'TEC_PJ',  true,true, true, true, true, true, '2.2.4');
+_m('COM_PAR','PROLONGADA',4,'ACAD_PF', true,true, false,true, true, true, '2.2.4');
+_m('COM_PAR','PROLONGADA',4,'ACAD_PJ', true,true, false,true, true, true, '2.2.4');
+_m('COM_PAR','PROLONGADA',4,'ADM_PF',  true,false,true, true, true, true, '2.2.4');
+_m('COM_PAR','PROLONGADA',4,'ADM_PJ',  true,true, true, true, true, true, '2.2.4');
+
+// ── Nomes legíveis dos requisitos ───────────────────────────
+var NOMES_REQUISITOS = {
+  cad:   'Cadastramento (Portal)',
+  cred:  'Credenciamento',
+  mapa:  'Mapa de Cotacao',
+  prop:  'Proposta Comercial',
+  comp:  'Atendimento Compliance / Due Diligence (DCI)',
+  contr: 'Instrumento Contratual'
+};
+
+// ── Mapeamento de flag curto → flag do FLAG_TO_STAGE ────────
+var FLAG_SHORT_TO_LONG = {
+  cad:   'cadastramento',
+  cred:  'credenciamento',
+  mapa:  'mapaCotacao',
+  prop:  'proposta',
+  comp:  'compliance',
+  contr: 'contrato'
+};
 
 
 // ████████████████████████████████████████████████████████████████████████████
@@ -2512,83 +2843,482 @@ var DAL = {
  * ============================================================
  * WORKFLOW DINT / FGV v2.0 — Motor de Regras Normativas
  * ============================================================
- * Calcula quais exigências (flags) se aplicam a um processo
- * com base nos normativos:
- *   NP AC.03.004, NP AC.03.006, NP AC.03.002,
- *   NP AF.03.003, Portaria 24/2024
+ * Calcula exigências com base na NORMAS_MATRIX extraída do
+ * "Resumo de Normas de Contratações de Terceiros".
  *
- * Função pura (sem I/O). Thresholds configuráveis em 00_Config.gs.
+ * Salvaguardas: validações pré-criação, pré-edição, pré-avanço
+ * de etapa e compatibilidade de fornecedor, com mensagens que
+ * citam a seção normativa específica.
+ *
+ * Normativos: NP AC.03.004, NP AC.03.006, NP AC.03.002,
+ *             NP AF.03.003, Portaria 24/2024
  * ============================================================
  */
 
+// ── Helpers ─────────────────────────────────────────────────
+
 /**
- * Calcula os 5 flags de exigência com base nas classificações do processo.
+ * Determina a faixa de valor normativa a partir do valor estimado.
+ * @param {number} valor
+ * @returns {{id: number, label: string}}
+ */
+function determinarFaixaValor_(valor) {
+  valor = parseFloat(valor) || 0;
+  for (var i = 0; i < FAIXAS_VALOR.length; i++) {
+    if (valor >= FAIXAS_VALOR[i].min && valor <= FAIXAS_VALOR[i].max) {
+      return FAIXAS_VALOR[i];
+    }
+  }
+  return FAIXAS_VALOR[FAIXAS_VALOR.length - 1];
+}
+
+/**
+ * Converte PAR legível ("Sem PAR"/"Com PAR") para chave da matriz.
+ * @param {string} par
+ * @returns {string}
+ */
+function parToKey_(par) {
+  return par === 'Com PAR' ? 'COM_PAR' : 'SEM_PAR';
+}
+
+/**
+ * Converte duração legível para chave da matriz.
+ * @param {string} duracao
+ * @returns {string}
+ */
+function duracaoToKey_(duracao) {
+  return duracao === 'Prolongada' ? 'PROLONGADA' : 'IMEDIATA';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONSULTA À MATRIZ NORMATIVA (substitui calcularRequisitos)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Consulta a NORMAS_MATRIX e retorna os 6 flags de exigência
+ * + metadados normativos (seção, faixa de valor).
  *
  * @param {Object} params
- * @param {string} params.tipoContratacao     - Ex: "Compra Direta", "Licitacao"
- * @param {string} params.naturezaTerceiro    - Ex: "Pessoa Juridica", "Pessoa Fisica"
- * @param {string} params.naturezaContratacao - Ex: "Servico", "Material", "Obra"
- * @param {string} params.formaContratacao    - Ex: "Contrato", "Ordem de Servico"
- * @param {number} params.valorEstimado       - Valor em BRL
+ * @param {string} params.tipoServico   - Ex: "Servico tecnico por PJ"
+ * @param {string} params.par           - "Sem PAR" ou "Com PAR"
+ * @param {string} params.duracao       - "Imediata" ou "Prolongada"
+ * @param {number} params.valorEstimado - Valor em BRL
  *
  * @returns {Object} {
- *   coletaPrecos: boolean,
- *   proposta: boolean,
- *   credenciamento: boolean,
- *   compliance: boolean,
- *   contrato: boolean
+ *   flags: { cadastramento, credenciamento, mapaCotacao, proposta, compliance, contrato },
+ *   secao: string,
+ *   faixaLabel: string,
+ *   found: boolean
  * }
  */
-function calcularRequisitos(params) {
-  var valor = parseFloat(params.valorEstimado) || 0;
+function consultarMatrizNormativa(params) {
+  var faixa = determinarFaixaValor_(params.valorEstimado);
+  var tipoKey = TIPO_SERVICO_KEY[params.tipoServico] || '';
+  var parKey = parToKey_(params.par);
+  var durKey = duracaoToKey_(params.duracao);
 
-  var flags = {
-    coletaPrecos:    false,
-    proposta:        false,
-    credenciamento:  false,
-    compliance:      false,
-    contrato:        false
+  var chave = parKey + '|' + durKey + '|' + faixa.id + '|' + tipoKey;
+  var entry = NORMAS_MATRIX[chave];
+
+  if (!entry) {
+    // Fallback: retorna tudo obrigatório por segurança (princípio conservador)
+    return {
+      flags: {
+        cadastramento: true, credenciamento: true, mapaCotacao: true,
+        proposta: true, compliance: true, contrato: true
+      },
+      secao: 'N/D',
+      faixaLabel: faixa.label,
+      found: false
+    };
+  }
+
+  return {
+    flags: {
+      cadastramento:  entry.cad,
+      credenciamento: entry.cred,
+      mapaCotacao:    entry.mapa,
+      proposta:       entry.prop,
+      compliance:     entry.comp,
+      contrato:       entry.contr
+    },
+    secao: entry.secao,
+    faixaLabel: faixa.label,
+    found: true
   };
-
-  // ── Regra: Coleta de Preços (NP AC.03.004) ───────────────
-  // Obrigatória para Compra Direta com valor >= threshold
-  // Sempre obrigatória para Licitação
-  if (params.tipoContratacao === 'Compra Direta' && valor >= THRESHOLDS.COLETA_PRECOS_VALOR) {
-    flags.coletaPrecos = true;
-  }
-  if (params.tipoContratacao === 'Licitacao') {
-    flags.coletaPrecos = true;
-  }
-
-  // ── Regra: Proposta Comercial (NP AC.03.004) ─────────────
-  // Obrigatória quando forma = Contrato ou valor >= threshold
-  if (params.formaContratacao === 'Contrato' || valor >= THRESHOLDS.PROPOSTA_VALOR) {
-    flags.proposta = true;
-  }
-
-  // ── Regra: Credenciamento (NP AC.03.006) ─────────────────
-  // Obrigatório para Pessoa Jurídica
-  if (params.naturezaTerceiro === 'Pessoa Juridica') {
-    flags.credenciamento = true;
-  }
-
-  // ── Regra: Compliance / Due Diligence (NP AC.03.006) ─────
-  // Obrigatório quando valor >= threshold ou natureza = Obra
-  if (valor >= THRESHOLDS.COMPLIANCE_VALOR || params.naturezaContratacao === 'Obra') {
-    flags.compliance = true;
-  }
-
-  // ── Regra: Instrumento Contratual (NP AF.03.003) ─────────
-  // Obrigatório quando forma = Contrato ou valor >= threshold
-  if (params.formaContratacao === 'Contrato') {
-    flags.contrato = true;
-  }
-  if (valor >= THRESHOLDS.CONTRATO_VALOR) {
-    flags.contrato = true;
-  }
-
-  return flags;
 }
+
+/**
+ * Wrapper de compatibilidade — chama consultarMatrizNormativa
+ * e retorna flags no formato antigo (5 campos) para código legado.
+ * Se tipoServico/par/duracao não forem fornecidos, usa regras simplificadas.
+ */
+function calcularRequisitos(params) {
+  // Se novos campos estão presentes, usar a matriz normativa
+  if (params.tipoServico && params.par && params.duracao) {
+    var resultado = consultarMatrizNormativa(params);
+    return {
+      cadastramento:  resultado.flags.cadastramento,
+      credenciamento: resultado.flags.credenciamento,
+      mapaCotacao:    resultado.flags.mapaCotacao,
+      proposta:       resultado.flags.proposta,
+      compliance:     resultado.flags.compliance,
+      contrato:       resultado.flags.contrato,
+      _secao:         resultado.secao,
+      _faixaLabel:    resultado.faixaLabel,
+      _found:         resultado.found
+    };
+  }
+
+  // Fallback legado (sem tipoServico/par/duracao)
+  var valor = parseFloat(params.valorEstimado) || 0;
+  return {
+    cadastramento:  true,
+    credenciamento: params.naturezaTerceiro === 'Pessoa Juridica',
+    mapaCotacao:    valor >= THRESHOLDS.COLETA_PRECOS_VALOR,
+    proposta:       params.formaContratacao === 'Contrato' || valor >= THRESHOLDS.PROPOSTA_VALOR,
+    compliance:     valor >= THRESHOLDS.COMPLIANCE_VALOR || params.naturezaContratacao === 'Obra',
+    contrato:       params.formaContratacao === 'Contrato' || valor >= THRESHOLDS.CONTRATO_VALOR,
+    _secao:         'legado',
+    _faixaLabel:    '',
+    _found:         false
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GERADOR DE MENSAGENS NORMATIVAS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Gera mensagem padronizada de salvaguarda normativa.
+ *
+ * @param {Object} opts
+ * @param {string} opts.acao         - "BLOQUEADO" ou "ATENCAO"
+ * @param {string} opts.secao        - Seção do resumo (ex: "1.1.3")
+ * @param {string} opts.tipoServico  - Tipo de serviço
+ * @param {string} opts.faixaLabel   - Faixa de valor legível
+ * @param {string} opts.par          - "Sem PAR" ou "Com PAR"
+ * @param {string} opts.duracao      - "Imediata" ou "Prolongada"
+ * @param {string} opts.requisito    - Nome do requisito (ex: "Credenciamento")
+ * @param {string} opts.complemento  - Texto adicional
+ * @returns {string}
+ */
+function gerarMensagemNormativa(opts) {
+  var parTexto = opts.par === 'Com PAR' ? 'com PAR' : 'sem PAR';
+  var durTexto = opts.duracao === 'Prolongada' ? 'prolongada' : 'imediata';
+
+  return opts.acao + ': Conforme Resumo de Normas de Contratacoes de Terceiros '
+    + '(secao ' + opts.secao + '), para ' + opts.tipoServico
+    + ' com valor ' + opts.faixaLabel
+    + ' em contratacao ' + durTexto + ' ' + parTexto
+    + ', ' + opts.requisito + '. '
+    + (opts.complemento || '');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SALVAGUARDA 1: VALIDAÇÃO PRÉ-CRIAÇÃO DE PROCESSO
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Valida dados do formulário ANTES de criar o processo.
+ * Retorna objeto com { valid, errors[], warnings[], flags, secao }.
+ *
+ * @param {Object} formData
+ * @returns {Object}
+ */
+function validarCriacaoProcesso(formData) {
+  var errors = [];
+  var warnings = [];
+
+  // 1. Validar tipo de serviço
+  if (!formData.tipoServico || TIPOS_SERVICO.indexOf(formData.tipoServico) === -1) {
+    errors.push('Tipo de Servico invalido. Opcoes: ' + TIPOS_SERVICO.join(', '));
+  }
+
+  // 2. Validar PAR
+  if (!formData.par || OPCOES_PAR.indexOf(formData.par) === -1) {
+    errors.push('Campo PAR obrigatorio. Opcoes: ' + OPCOES_PAR.join(', '));
+  }
+
+  // 3. Validar Duração
+  if (!formData.duracao || OPCOES_DURACAO.indexOf(formData.duracao) === -1) {
+    errors.push('Campo Duracao obrigatorio. Opcoes: ' + OPCOES_DURACAO.join(', '));
+  }
+
+  // 4. Cross-validation: Aquisição de bens → só PJ
+  if (formData.tipoServico === 'Aquisicao de bens de PJ'
+      && formData.naturezaTerceiro === 'Pessoa Fisica') {
+    errors.push('BLOQUEADO: Aquisicao de bens e restrita a Pessoa Juridica '
+      + 'conforme Resumo Normas, secoes 1.x e 2.x. Apenas fornecedores PJ (CNPJ) sao aceitos.');
+  }
+
+  // 5. Cross-validation: Tipo de serviço PF vs PJ coerência
+  if (formData.tipoServico && formData.naturezaTerceiro) {
+    var ehPF = formData.tipoServico.indexOf('PF autonomo') !== -1;
+    var ehPJ = formData.tipoServico.indexOf('de PJ') !== -1 || formData.tipoServico.indexOf('por PJ') !== -1;
+    if (ehPF && formData.naturezaTerceiro === 'Pessoa Juridica') {
+      errors.push('Tipo de Servico indica PF autonomo, mas Natureza do Terceiro e Pessoa Juridica. Corrija a inconsistencia.');
+    }
+    if (ehPJ && formData.naturezaTerceiro === 'Pessoa Fisica') {
+      errors.push('Tipo de Servico indica PJ, mas Natureza do Terceiro e Pessoa Fisica. Corrija a inconsistencia.');
+    }
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, errors: errors, warnings: warnings, flags: null, secao: null };
+  }
+
+  // 6. Consultar matriz normativa
+  var resultado = consultarMatrizNormativa({
+    tipoServico:   formData.tipoServico,
+    par:           formData.par,
+    duracao:       formData.duracao,
+    valorEstimado: parseFloat(formData.valorEstimado) || 0
+  });
+
+  // 7. Warnings informativos sobre requisitos ativados
+  var flagKeys = Object.keys(resultado.flags);
+  var obrigatorios = [];
+  for (var i = 0; i < flagKeys.length; i++) {
+    if (resultado.flags[flagKeys[i]]) {
+      obrigatorios.push(NOMES_REQUISITOS[flagKeys[i].replace('cadastramento','cad')
+        .replace('credenciamento','cred').replace('mapaCotacao','mapa')
+        .replace('proposta','prop').replace('compliance','comp')
+        .replace('contrato','contr')] || flagKeys[i]);
+    }
+  }
+  if (obrigatorios.length > 0) {
+    warnings.push('Conforme secao ' + resultado.secao + ': exigencias obrigatorias para esta contratacao: '
+      + obrigatorios.join(', ') + '.');
+  }
+
+  if (!resultado.found) {
+    warnings.push('ATENCAO: Combinacao nao encontrada na matriz normativa. Todas as exigencias foram ativadas por precaucao.');
+  }
+
+  return {
+    valid: true,
+    errors: [],
+    warnings: warnings,
+    flags: resultado.flags,
+    secao: resultado.secao,
+    faixaLabel: resultado.faixaLabel
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SALVAGUARDA 2: VALIDAÇÃO PRÉ-EDIÇÃO DE PROCESSO
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Valida edição de processo, detectando mudanças que afetam requisitos.
+ * Compara flags antigos com novos e gera warnings/bloqueios.
+ *
+ * @param {Array} dadosAtuais - Row atual do processo
+ * @param {Object} novosDados - Campos sendo alterados
+ * @returns {Object} { valid, errors[], warnings[], newFlags, secao }
+ */
+function validarEdicaoProcesso(dadosAtuais, novosDados) {
+  var errors = [];
+  var warnings = [];
+
+  // Montar parâmetros resultantes (merge atual + novo)
+  var tipoServico = novosDados.tipoServico || dadosAtuais[COL_PROC.TIPO_SERVICO - 1] || '';
+  var par = novosDados.par || dadosAtuais[COL_PROC.PAR - 1] || 'Sem PAR';
+  var duracao = novosDados.duracao || dadosAtuais[COL_PROC.DURACAO_CONTRATO - 1] || 'Imediata';
+  var valor = novosDados.valorEstimado !== undefined
+    ? parseFloat(novosDados.valorEstimado)
+    : parseFloat(dadosAtuais[COL_PROC.VALOR_ESTIMADO - 1]) || 0;
+
+  // Cross-validations
+  var natTerceiro = novosDados.naturezaTerceiro || dadosAtuais[COL_PROC.NATUREZA_TERCEIRO - 1] || '';
+  if (tipoServico === 'Aquisicao de bens de PJ' && natTerceiro === 'Pessoa Fisica') {
+    errors.push('BLOQUEADO: Aquisicao de bens e restrita a PJ.');
+  }
+
+  if (tipoServico) {
+    var ehPF = tipoServico.indexOf('PF autonomo') !== -1;
+    var ehPJ = tipoServico.indexOf('de PJ') !== -1 || tipoServico.indexOf('por PJ') !== -1;
+    if (ehPF && natTerceiro === 'Pessoa Juridica') {
+      errors.push('Tipo de Servico indica PF autonomo, mas Natureza do Terceiro e PJ.');
+    }
+    if (ehPJ && natTerceiro === 'Pessoa Fisica') {
+      errors.push('Tipo de Servico indica PJ, mas Natureza do Terceiro e PF.');
+    }
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, errors: errors, warnings: warnings, newFlags: null, secao: null };
+  }
+
+  // Consultar nova matriz (se tipoServico está definido)
+  if (!tipoServico || TIPOS_SERVICO.indexOf(tipoServico) === -1) {
+    // Sem tipo de serviço normativo, usar fallback legado
+    return { valid: true, errors: [], warnings: [], newFlags: null, secao: null };
+  }
+
+  var resultado = consultarMatrizNormativa({
+    tipoServico: tipoServico, par: par, duracao: duracao, valorEstimado: valor
+  });
+
+  // Detectar mudança de faixa de valor
+  var valorAntigo = parseFloat(dadosAtuais[COL_PROC.VALOR_ESTIMADO - 1]) || 0;
+  var faixaAntiga = determinarFaixaValor_(valorAntigo);
+  var faixaNova = determinarFaixaValor_(valor);
+
+  if (faixaAntiga.id !== faixaNova.id) {
+    // Identificar requisitos que passaram a ser obrigatórios
+    var novosRequisitos = [];
+    var flagKeys = ['cad','cred','mapa','prop','comp','contr'];
+    var flagLong = ['cadastramento','credenciamento','mapaCotacao','proposta','compliance','contrato'];
+    for (var i = 0; i < flagLong.length; i++) {
+      if (resultado.flags[flagLong[i]]) {
+        novosRequisitos.push(NOMES_REQUISITOS[flagKeys[i]]);
+      }
+    }
+    warnings.push(gerarMensagemNormativa({
+      acao: 'ATENCAO',
+      secao: resultado.secao,
+      tipoServico: tipoServico,
+      faixaLabel: resultado.faixaLabel,
+      par: par,
+      duracao: duracao,
+      requisito: 'as seguintes exigencias passam a ser obrigatorias: ' + novosRequisitos.join(', '),
+      complemento: 'Mudanca de faixa de valor: ' + faixaAntiga.label + ' -> ' + faixaNova.label + '.'
+    }));
+  }
+
+  return {
+    valid: true,
+    errors: [],
+    warnings: warnings,
+    newFlags: resultado.flags,
+    secao: resultado.secao,
+    faixaLabel: resultado.faixaLabel
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SALVAGUARDA 3: VALIDAÇÃO PRÉ-AVANÇO DE ETAPA
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Verifica se uma etapa pode ser marcada como N/A ou pulada.
+ * Se a etapa é obrigatória conforme a matriz normativa, BLOQUEIA.
+ *
+ * @param {string} processoId
+ * @param {number} etapaNum - Número da etapa (1-23)
+ * @returns {Object} { allowed, message }
+ */
+function validarAvancoEtapa(processoId, etapaNum) {
+  // Ler dados do processo
+  var proc = DAL.findRow(SHEET.PROCESSOS, COL_PROC.ID, processoId);
+  if (!proc) {
+    return { allowed: true, message: '' }; // processo não encontrado → não bloquear
+  }
+
+  var row = proc.data;
+  var tipoServico = row[COL_PROC.TIPO_SERVICO - 1];
+  var par = row[COL_PROC.PAR - 1];
+  var duracao = row[COL_PROC.DURACAO_CONTRATO - 1];
+  var valor = parseFloat(row[COL_PROC.VALOR_ESTIMADO - 1]) || 0;
+
+  // Se não tem tipo de serviço normativo, não bloquear
+  if (!tipoServico || TIPOS_SERVICO.indexOf(tipoServico) === -1) {
+    return { allowed: true, message: '' };
+  }
+
+  var resultado = consultarMatrizNormativa({
+    tipoServico: tipoServico, par: par || 'Sem PAR',
+    duracao: duracao || 'Imediata', valorEstimado: valor
+  });
+
+  // Verificar se a etapa sendo concluída/pulada é obrigatória
+  var flagLong = Object.keys(FLAG_TO_STAGE);
+  for (var f = 0; f < flagLong.length; f++) {
+    var flagName = flagLong[f];
+    var stageNums = FLAG_TO_STAGE[flagName];
+
+    // A etapa está neste grupo de flags?
+    if (stageNums.indexOf(etapaNum) === -1) continue;
+
+    // Este flag é obrigatório?
+    if (resultado.flags[flagName]) {
+      // A etapa é obrigatória — verificar se está sendo pulada (N/A)
+      var stageRows = DAL.readWhere(SHEET.ETAPAS, function(r) {
+        return String(r[COL_ETAPA.ID_PROCESSO - 1]) === processoId
+          && r[COL_ETAPA.NUM - 1] === etapaNum;
+      });
+      if (stageRows.length > 0 && stageRows[0].data[COL_ETAPA.STATUS - 1] === STATUS.NAO_APLICAVEL) {
+        // Tentando avançar sobre etapa N/A que deveria ser obrigatória
+        var nomeRequisito = NOMES_REQUISITOS[
+          Object.keys(FLAG_SHORT_TO_LONG).filter(function(k) { return FLAG_SHORT_TO_LONG[k] === flagName; })[0]
+        ] || flagName;
+
+        return {
+          allowed: false,
+          message: gerarMensagemNormativa({
+            acao: 'BLOQUEADO',
+            secao: resultado.secao,
+            tipoServico: tipoServico,
+            faixaLabel: resultado.faixaLabel,
+            par: par || 'Sem PAR',
+            duracao: duracao || 'Imediata',
+            requisito: 'o ' + nomeRequisito + ' e OBRIGATORIO',
+            complemento: 'Esta etapa nao pode ser marcada como N/A.'
+          })
+        };
+      }
+    }
+  }
+
+  return { allowed: true, message: '' };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SALVAGUARDA 4: COMPATIBILIDADE FORNECEDOR × PROCESSO
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Valida se o tipo de fornecedor (PJ/PF) é compatível
+ * com o tipo de serviço do processo.
+ *
+ * @param {string} tipoServico - Tipo de serviço do processo
+ * @param {string} tipoFornecedor - "Pessoa Juridica" ou "Pessoa Fisica"
+ * @returns {Object} { compatible, message }
+ */
+function validarFornecedorParaProcesso(tipoServico, tipoFornecedor) {
+  if (!tipoServico || TIPOS_SERVICO.indexOf(tipoServico) === -1) {
+    return { compatible: true, message: '' };
+  }
+
+  var exigePJ = tipoServico.indexOf('de PJ') !== -1 || tipoServico.indexOf('por PJ') !== -1;
+  var exigePF = tipoServico.indexOf('PF autonomo') !== -1;
+
+  if (exigePJ && tipoFornecedor === 'Pessoa Fisica') {
+    return {
+      compatible: false,
+      message: 'BLOQUEADO: O tipo de servico "' + tipoServico
+        + '" exige fornecedor Pessoa Juridica (PJ). '
+        + 'Fornecedor PF nao e aceito para esta contratacao.'
+    };
+  }
+
+  if (exigePF && tipoFornecedor === 'Pessoa Juridica') {
+    return {
+      compatible: false,
+      message: 'BLOQUEADO: O tipo de servico "' + tipoServico
+        + '" exige fornecedor Pessoa Fisica (PF autonomo). '
+        + 'Fornecedor PJ nao e aceito para esta contratacao.'
+    };
+  }
+
+  return { compatible: true, message: '' };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FUNÇÕES INTERNAS DE APLICAÇÃO DE FLAGS
+// ═══════════════════════════════════════════════════════════════
 
 /**
  * Aplica os flags de requisitos nas linhas de Etapas de um processo.
@@ -2596,7 +3326,7 @@ function calcularRequisitos(params) {
  * DEVE ser chamada dentro de withDocumentLock().
  *
  * @param {string} processoId
- * @param {Object} flags - Saída de calcularRequisitos()
+ * @param {Object} flags - Saída de calcularRequisitos() (6 flags)
  */
 function aplicarRequisitosEtapas_(processoId, flags) {
   var stageRows = DAL.readWhere(SHEET.ETAPAS, function(row) {
@@ -2624,47 +3354,60 @@ function aplicarRequisitosEtapas_(processoId, flags) {
 }
 
 /**
- * Define os valores das 5 colunas de flags na linha do processo.
- * Modifica o array in-place e retorna.
+ * Define os valores das 6 colunas de flags na linha do processo.
+ * Inclui os novos campos TIPO_SERVICO, PAR, DURACAO_CONTRATO, CADASTRAMENTO.
  *
  * @param {Array<any>} processoRow - Array representando a linha do processo
- * @param {Object} flags - Saída de calcularRequisitos()
+ * @param {Object} flags - Saída de calcularRequisitos() (6 flags)
  * @returns {Array<any>} O mesmo array modificado
  */
 function setProcessFlags_(processoRow, flags) {
-  processoRow[COL_PROC.COLETA_PRECOS - 1]  = flags.coletaPrecos   ? 'Obrigatorio' : 'N/A';
-  processoRow[COL_PROC.PROPOSTA - 1]        = flags.proposta       ? 'Obrigatorio' : 'N/A';
-  processoRow[COL_PROC.CREDENCIAMENTO - 1]  = flags.credenciamento ? 'Obrigatorio' : 'N/A';
-  processoRow[COL_PROC.COMPLIANCE - 1]      = flags.compliance     ? 'Obrigatorio' : 'N/A';
-  processoRow[COL_PROC.CONTRATO - 1]        = flags.contrato       ? 'Obrigatorio' : 'N/A';
+  // Colunas 17-21: flags de etapas (mantendo nomes originais das colunas)
+  processoRow[COL_PROC.COLETA_PRECOS - 1]  = flags.mapaCotacao     ? 'Obrigatorio' : 'N/A';
+  processoRow[COL_PROC.PROPOSTA - 1]        = flags.proposta        ? 'Obrigatorio' : 'N/A';
+  processoRow[COL_PROC.CREDENCIAMENTO - 1]  = flags.credenciamento  ? 'Obrigatorio' : 'N/A';
+  processoRow[COL_PROC.COMPLIANCE - 1]      = flags.compliance      ? 'Obrigatorio' : 'N/A';
+  processoRow[COL_PROC.CONTRATO - 1]        = flags.contrato        ? 'Obrigatorio' : 'N/A';
+  // Coluna 28: Cadastramento
+  processoRow[COL_PROC.CADASTRAMENTO - 1]   = flags.cadastramento   ? 'Obrigatorio' : 'N/A';
   return processoRow;
 }
 
 /**
  * Retorna descrição textual dos requisitos aplicáveis (para display).
+ * Atualizado para 6 flags + referência normativa.
+ *
  * @param {Object} flags
+ * @param {string} [secao] - Seção do resumo normativo
  * @returns {string}
  */
-function descreverRequisitos(flags) {
+function descreverRequisitos(flags, secao) {
   var nomes = {
-    coletaPrecos:   'Coleta de Precos',
-    proposta:       'Proposta Comercial',
+    cadastramento:  'Cadastramento',
     credenciamento: 'Credenciamento',
-    compliance:     'Compliance/Due Diligence',
+    mapaCotacao:    'Mapa de Cotacao',
+    proposta:       'Proposta Comercial',
+    compliance:     'Compliance/Due Diligence (DCI)',
     contrato:       'Instrumento Contratual'
   };
 
   var obrigatorios = [];
-  var flagNames = Object.keys(flags);
+  var flagNames = Object.keys(nomes);
   for (var i = 0; i < flagNames.length; i++) {
     if (flags[flagNames[i]]) {
       obrigatorios.push(nomes[flagNames[i]]);
     }
   }
 
-  return obrigatorios.length > 0
+  var desc = obrigatorios.length > 0
     ? 'Obrigatorios: ' + obrigatorios.join(', ')
     : 'Nenhuma exigencia adicional';
+
+  if (secao && secao !== 'legado' && secao !== 'N/D') {
+    desc += ' (Resumo Normas, secao ' + secao + ')';
+  }
+
+  return desc;
 }
 
 
@@ -2767,6 +3510,12 @@ function consultarEtapas(processoId) {
  */
 function concluirEtapa(processoId, etapaNum) {
   return withDocumentLock(function() {
+    // SALVAGUARDA NORMATIVA: verificar se etapa pode ser avançada/pulada
+    var validacaoAvanco = validarAvancoEtapa(processoId, etapaNum);
+    if (!validacaoAvanco.allowed) {
+      return { success: false, message: validacaoAvanco.message, nextStage: null };
+    }
+
     // 1. Ler todas as etapas do processo
     var stageRows = DAL.readWhere(SHEET.ETAPAS, function(row) {
       return String(row[COL_ETAPA.ID_PROCESSO - 1]) === processoId;
@@ -3029,10 +3778,11 @@ function atualizarStatusProcesso_(processoId, novoStatus) {
 function criarProcesso(formData) {
   try {
     return withDocumentLock(function() {
-      // 1. Validar campos obrigatórios
+      // 1. Validar campos obrigatórios (incluindo novos campos normativos)
       var validation = validateRequired(formData, [
         'descricao', 'tipoContratacao', 'naturezaTerceiro',
-        'naturezaContratacao', 'formaContratacao', 'valorEstimado'
+        'naturezaContratacao', 'formaContratacao', 'valorEstimado',
+        'tipoServico', 'par', 'duracao'
       ]);
       if (!validation.valid) {
         return {
@@ -3046,12 +3796,25 @@ function criarProcesso(formData) {
         return { success: false, message: 'Valor estimado deve ser um numero positivo.', data: null };
       }
 
-      // 2. Gerar ID sequencial
+      // 2. SALVAGUARDA NORMATIVA: validação pré-criação
+      var salvaguarda = validarCriacaoProcesso(formData);
+      if (!salvaguarda.valid) {
+        return {
+          success: false,
+          message: salvaguarda.errors.join(' | '),
+          data: null
+        };
+      }
+
+      // 3. Gerar ID sequencial
       var allProcessos = DAL.readAll(SHEET.PROCESSOS);
       var newId = generateNextId_(allProcessos);
 
-      // 3. Calcular flags de exigência
+      // 4. Calcular flags de exigência via matriz normativa
       var flags = calcularRequisitos({
+        tipoServico:         formData.tipoServico,
+        par:                 formData.par,
+        duracao:             formData.duracao,
         tipoContratacao:     formData.tipoContratacao,
         naturezaTerceiro:    formData.naturezaTerceiro,
         naturezaContratacao: formData.naturezaContratacao,
@@ -3059,12 +3822,12 @@ function criarProcesso(formData) {
         valorEstimado:       parseFloat(formData.valorEstimado)
       });
 
-      // 4. Montar linha do processo
+      // 5. Montar linha do processo (28 colunas)
       var hoje = new Date();
       var prazoDias = parseInt(formData.prazoPrevisto, 10) || 30;
       var prazoPrevisto = new Date(hoje.getTime() + prazoDias * 24 * 60 * 60 * 1000);
 
-      var newRow = new Array(24);
+      var newRow = new Array(28);
       newRow[COL_PROC.ID - 1]                   = newId;
       newRow[COL_PROC.STATUS_GERAL - 1]         = STATUS.EM_ANDAMENTO;
       newRow[COL_PROC.ETAPA_ATUAL - 1]          = '1. ' + STAGES[0].name;
@@ -3084,27 +3847,38 @@ function criarProcesso(formData) {
       newRow[COL_PROC.OBSERVACOES - 1]          = normalizeString(formData.observacoes || '');
       newRow[COL_PROC.DIAS_ABERTO - 1]          = 0;
       newRow[COL_PROC.ALERTAS - 1]              = '';
+      // Novos campos normativos
+      newRow[COL_PROC.TIPO_SERVICO - 1]         = formData.tipoServico;
+      newRow[COL_PROC.PAR - 1]                  = formData.par;
+      newRow[COL_PROC.DURACAO_CONTRATO - 1]     = formData.duracao;
 
-      // Aplicar flags
+      // Aplicar flags (inclui coluna 28: Cadastramento)
       setProcessFlags_(newRow, flags);
 
-      // 5. Gravar processo
+      // 6. Gravar processo
       DAL.appendRow(SHEET.PROCESSOS, newRow);
 
-      // 6. Criar 23 etapas
+      // 7. Criar 23 etapas
       criarEtapasParaProcesso_(newId);
 
-      // 7. Aplicar flags nas etapas (marcar N/A)
+      // 8. Aplicar flags nas etapas (marcar N/A)
       aplicarRequisitosEtapas_(newId, flags);
 
-      // 8. Log
+      // 9. Log (com referência normativa)
+      var secao = flags._secao || '';
       logAction('CRIAR_PROCESSO', 'Processo ' + newId + ' criado - '
-                + formData.descricao + ' | ' + descreverRequisitos(flags));
+                + formData.descricao + ' | ' + descreverRequisitos(flags, secao));
+
+      // 10. Retorno com warnings informativos
+      var msgSucesso = 'Processo ' + newId + ' criado com sucesso.';
+      if (salvaguarda.warnings && salvaguarda.warnings.length > 0) {
+        msgSucesso += ' INFO: ' + salvaguarda.warnings.join(' ');
+      }
 
       return {
         success: true,
-        message: 'Processo ' + newId + ' criado com sucesso.',
-        data: { id: newId, flags: flags }
+        message: msgSucesso,
+        data: { id: newId, flags: flags, secao: secao, warnings: salvaguarda.warnings }
       };
     }, 'criarProcesso');
   } catch (e) {
@@ -3176,7 +3950,11 @@ function consultarProcessos(filters) {
         contrato:             row[COL_PROC.CONTRATO - 1],
         observacoes:          row[COL_PROC.OBSERVACOES - 1],
         diasAberto:           diasAberto,
-        alertas:              row[COL_PROC.ALERTAS - 1]
+        alertas:              row[COL_PROC.ALERTAS - 1],
+        tipoServico:          row[COL_PROC.TIPO_SERVICO - 1] || '',
+        par:                  row[COL_PROC.PAR - 1] || '',
+        duracaoContrato:      row[COL_PROC.DURACAO_CONTRATO - 1] || '',
+        cadastramento:        row[COL_PROC.CADASTRAMENTO - 1] || ''
       });
     }
 
@@ -3260,6 +4038,19 @@ function editarProcesso(id, formData) {
         row[COL_PROC.VALOR_ESTIMADO - 1] = parseFloat(formData.valorEstimado);
         recalcFlags = true;
       }
+      // Novos campos normativos
+      if (formData.tipoServico !== undefined) {
+        row[COL_PROC.TIPO_SERVICO - 1] = formData.tipoServico;
+        recalcFlags = true;
+      }
+      if (formData.par !== undefined) {
+        row[COL_PROC.PAR - 1] = formData.par;
+        recalcFlags = true;
+      }
+      if (formData.duracao !== undefined) {
+        row[COL_PROC.DURACAO_CONTRATO - 1] = formData.duracao;
+        recalcFlags = true;
+      }
       if (formData.fornecedor !== undefined) {
         row[COL_PROC.FORNECEDOR - 1] = normalizeString(formData.fornecedor);
       }
@@ -3279,9 +4070,18 @@ function editarProcesso(id, formData) {
         row[COL_PROC.OBSERVACOES - 1] = normalizeString(formData.observacoes);
       }
 
-      // Recalcular flags se necessário
+      // SALVAGUARDA NORMATIVA: validação pré-edição
       if (recalcFlags) {
+        var validacao = validarEdicaoProcesso(proc.data, formData);
+        if (!validacao.valid) {
+          return { success: false, message: validacao.errors.join(' | ') };
+        }
+
+        // Recalcular flags com a matriz normativa
         var flags = calcularRequisitos({
+          tipoServico:         row[COL_PROC.TIPO_SERVICO - 1],
+          par:                 row[COL_PROC.PAR - 1],
+          duracao:             row[COL_PROC.DURACAO_CONTRATO - 1],
           tipoContratacao:     row[COL_PROC.TIPO_CONTRATACAO - 1],
           naturezaTerceiro:    row[COL_PROC.NATUREZA_TERCEIRO - 1],
           naturezaContratacao: row[COL_PROC.NATUREZA_CONTRATACAO - 1],
@@ -3290,11 +4090,27 @@ function editarProcesso(id, formData) {
         });
         setProcessFlags_(row, flags);
         aplicarRequisitosEtapas_(id, flags);
+
+        // Expandir row se necessário (processos antigos com 24 colunas)
+        while (row.length < 28) { row.push(''); }
+
+        DAL.updateRow(SHEET.PROCESSOS, proc.rowIndex, row);
+
+        var msgLog = 'Processo ' + id + ' editado (flags recalculados - secao ' + (flags._secao || 'N/D') + ')';
+        if (validacao.warnings && validacao.warnings.length > 0) {
+          msgLog += ' | WARNINGS: ' + validacao.warnings.join('; ');
+        }
+        logAction('EDITAR_PROCESSO', msgLog);
+
+        var msgRetorno = 'Processo ' + id + ' atualizado.';
+        if (validacao.warnings && validacao.warnings.length > 0) {
+          msgRetorno += ' INFO: ' + validacao.warnings.join(' ');
+        }
+        return { success: true, message: msgRetorno };
       }
 
       DAL.updateRow(SHEET.PROCESSOS, proc.rowIndex, row);
-      logAction('EDITAR_PROCESSO', 'Processo ' + id + ' editado'
-                + (recalcFlags ? ' (flags recalculados)' : ''));
+      logAction('EDITAR_PROCESSO', 'Processo ' + id + ' editado');
 
       return { success: true, message: 'Processo ' + id + ' atualizado.' };
     }, 'editarProcesso');
@@ -3437,7 +4253,10 @@ function getProcessoParaEdicao(id) {
         centroCusto:          r[COL_PROC.CENTRO_CUSTO - 1],
         requisitante:         r[COL_PROC.REQUISITANTE - 1],
         estrutura:            r[COL_PROC.ESTRUTURA - 1],
-        observacoes:          r[COL_PROC.OBSERVACOES - 1]
+        observacoes:          r[COL_PROC.OBSERVACOES - 1],
+        tipoServico:          r[COL_PROC.TIPO_SERVICO - 1] || '',
+        par:                  r[COL_PROC.PAR - 1] || '',
+        duracao:              r[COL_PROC.DURACAO_CONTRATO - 1] || ''
       },
       message: 'Processo carregado.'
     };
@@ -3485,7 +4304,44 @@ function getFormOptions() {
     tiposContratacao:      TIPOS_CONTRATACAO,
     naturezasTerceiro:     NATUREZAS_TERCEIRO,
     naturezasContratacao:  NATUREZAS_CONTRATACAO,
-    formasContratacao:     FORMAS_CONTRATACAO
+    formasContratacao:     FORMAS_CONTRATACAO,
+    tiposServico:          TIPOS_SERVICO,
+    opcoesPar:             OPCOES_PAR,
+    opcoesDuracao:         OPCOES_DURACAO
+  };
+}
+
+/**
+ * Endpoint para preview de requisitos normativos (chamado do frontend).
+ * @param {Object} params - { tipoServico, par, duracao, valorEstimado }
+ * @returns {Object} Resultado da consulta à matriz
+ */
+function previewRequisitosNormativos(params) {
+  var resultado = consultarMatrizNormativa(params);
+  var flagNames = Object.keys(resultado.flags);
+  var obrigatorios = [];
+  var dispensaveis = [];
+
+  for (var i = 0; i < flagNames.length; i++) {
+    var shortKey = flagNames[i].replace('cadastramento','cad')
+      .replace('credenciamento','cred').replace('mapaCotacao','mapa')
+      .replace('proposta','prop').replace('compliance','comp')
+      .replace('contrato','contr');
+    var nome = NOMES_REQUISITOS[shortKey] || flagNames[i];
+
+    if (resultado.flags[flagNames[i]]) {
+      obrigatorios.push(nome);
+    } else {
+      dispensaveis.push(nome);
+    }
+  }
+
+  return {
+    secao: resultado.secao,
+    faixaLabel: resultado.faixaLabel,
+    found: resultado.found,
+    obrigatorios: obrigatorios,
+    dispensaveis: dispensaveis
   };
 }
 
@@ -3540,6 +4396,26 @@ function criarFornecedor(formData) {
       var docLimpo = String(formData.cnpjCpf).replace(/[^\d]/g, '');
       if (!validateCNPJorCPF(docLimpo)) {
         return { success: false, message: 'CNPJ/CPF invalido.', data: null };
+      }
+
+      // 2b. SALVAGUARDA: validar tipo PJ/PF vs documento
+      if (formData.tipo === 'Pessoa Juridica' && docLimpo.length !== 14) {
+        return { success: false, message: 'Fornecedor PJ deve ter CNPJ (14 digitos).', data: null };
+      }
+      if (formData.tipo === 'Pessoa Fisica' && docLimpo.length !== 11) {
+        return { success: false, message: 'Fornecedor PF deve ter CPF (11 digitos).', data: null };
+      }
+
+      // 2c. SALVAGUARDA: se vinculado a processo, validar compatibilidade
+      if (formData.processoId) {
+        var procRef = DAL.findRow(SHEET.PROCESSOS, COL_PROC.ID, formData.processoId);
+        if (procRef) {
+          var tipoServ = procRef.data[COL_PROC.TIPO_SERVICO - 1];
+          var compat = validarFornecedorParaProcesso(tipoServ, formData.tipo);
+          if (!compat.compatible) {
+            return { success: false, message: compat.message, data: null };
+          }
+        }
       }
 
       // 3. Verificar duplicidade
