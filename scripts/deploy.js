@@ -53,6 +53,7 @@ function main() {
   // 2. Listar arquivos que serão enviados
   var rootDir = path.join(ROOT, config.rootDir || '.');
   var files = fs.readdirSync(rootDir).filter(function(f) {
+    if (f.indexOf('CONSOLIDADO') !== -1) return false;
     return f.endsWith('.gs') || f.endsWith('.html') || f === 'appsscript.json';
   });
   console.log('');

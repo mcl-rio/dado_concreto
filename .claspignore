@@ -8,3 +8,7 @@ package.json
 package-lock.json
 .clasp.json
 .gitignore
+
+# Arquivo consolidado — apenas para instalacao manual (copy/paste)
+# Nao enviar via clasp push (causa conflito de funcoes duplicadas)
+*CONSOLIDADO*
