@@ -18,6 +18,7 @@ function onOpen(e) {
     .addSubMenu(ui.createMenu('Dashboard')
       .addItem('Atualizar Dashboard', 'refreshDashboard'))
     .addSubMenu(ui.createMenu('Configuracao')
+      .addItem('Configurar Planilha', 'setupSpreadsheet')
       .addItem('Parametros', 'showPainelConfig')
       .addItem('Gerenciar Alertas', 'showPainelAlertas')
       .addItem('Instalar Triggers', 'installTriggers')
