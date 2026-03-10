@@ -1,0 +1,256 @@
+<!-- Painel de Aquisicoes -->
+<div id="aq-view-consulta">
+  <div class="card">
+    <div class="card-title">Aquisicoes</div>
+    <div class="btn-group mb-8">
+      <button class="btn btn-primary btn-sm" onclick="showAquisicaoForm()">Nova Aquisicao</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="aq-search" placeholder="Buscar por ID, descricao ou fornecedor..." onkeyup="if(event.key==='Enter')buscarAquisicoes()">
+      <button class="btn btn-secondary btn-sm" onclick="buscarAquisicoes()">Buscar</button>
+    </div>
+    <div class="form-group">
+      <select id="aq-filter-status" onchange="buscarAquisicoes()" style="padding:6px;font-size:12px;">
+        <option value="">Todos os Status</option>
+        <option value="Em Andamento">Em Andamento</option>
+        <option value="Concluido">Concluido</option>
+        <option value="Cancelado">Cancelado</option>
+        <option value="Suspenso">Suspenso</option>
+      </select>
+    </div>
+  </div>
+  <div id="aq-results"></div>
+</div>
+
+<div id="aq-view-form" class="hidden">
+  <div class="card">
+    <div class="card-title" id="aq-form-title">Nova Aquisicao</div>
+    <form id="aq-form">
+      <input type="hidden" name="id" id="aq-form-id">
+      <div class="form-group">
+        <label>Descricao *</label>
+        <textarea name="descricao" required></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="form-group">
+          <label>Tipo de Contratacao *</label>
+          <select name="tipoContratacao" required id="aq-tipo"></select>
+        </div>
+        <div class="form-group">
+          <label>Natureza do Terceiro *</label>
+          <select name="naturezaTerceiro" required id="aq-nat-terceiro"></select>
+        </div>
+        <div class="form-group">
+          <label>Natureza da Contratacao *</label>
+          <select name="naturezaContratacao" required id="aq-nat-contratacao"></select>
+        </div>
+        <div class="form-group">
+          <label>Forma de Contratacao *</label>
+          <select name="formaContratacao" required id="aq-forma"></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Valor Estimado (R$) *</label>
+        <input type="number" name="valorEstimado" step="0.01" min="0.01" required>
+      </div>
+      <div class="card" style="background:#f0f7ff;border-color:#b8d4f0;">
+        <div class="card-title" style="font-size:12px;">Fornecedor (opcional)</div>
+        <div class="form-group">
+          <label>Selecionar fornecedor cadastrado</label>
+          <select id="aq-forn-select" onchange="onFornecedorSelect()">
+            <option value="">— Sem fornecedor —</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="form-group">
+            <label>Fornecedor (nome)</label>
+            <input type="text" name="fornecedor" id="aq-fornecedor-nome">
+          </div>
+          <div class="form-group">
+            <label>CNPJ/CPF</label>
+            <input type="text" name="cnpjCpf" id="aq-fornecedor-doc">
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="form-group">
+          <label>Centro de Custo</label>
+          <input type="text" name="centroCusto">
+        </div>
+        <div class="form-group">
+          <label>Requisitante</label>
+          <input type="text" name="requisitante">
+        </div>
+        <div class="form-group">
+          <label>Prazo (dias)</label>
+          <input type="number" name="prazoPrevisto" value="30" min="1">
+        </div>
+        <div class="form-group">
+          <label>Estrutura</label>
+          <input type="text" name="estrutura">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observacoes</label>
+        <textarea name="observacoes"></textarea>
+      </div>
+      <div class="btn-group">
+        <button type="button" class="btn btn-primary" onclick="salvarAquisicao()">Salvar</button>
+        <button type="button" class="btn btn-secondary" onclick="hideAquisicaoForm()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+var editingAquisicaoId = null;
+
+function initAquisicoesPanel(mode) {
+  callServer('getFormOptions').then(function(opts) {
+    populateSelect('aq-tipo', opts.tiposContratacao);
+    populateSelect('aq-nat-terceiro', opts.naturezasTerceiro);
+    populateSelect('aq-nat-contratacao', opts.naturezasContratacao);
+    populateSelect('aq-forma', opts.formasContratacao);
+  });
+  callServer('getFornecedoresParaSelect').then(function(list) {
+    var sel = document.getElementById('aq-forn-select');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Sem fornecedor —</option>';
+    list.forEach(function(f) {
+      sel.innerHTML += '<option value="' + f.cnpjCpf + '" data-nome="' + f.razaoSocial + '">' + f.razaoSocial + ' (' + f.cnpjCpf + ')</option>';
+    });
+  });
+  if (mode === 'novo') showAquisicaoForm(); else buscarAquisicoes();
+}
+
+function onFornecedorSelect() {
+  var sel = document.getElementById('aq-forn-select');
+  var opt = sel.options[sel.selectedIndex];
+  document.getElementById('aq-fornecedor-nome').value = opt.dataset.nome || '';
+  document.getElementById('aq-fornecedor-doc').value = sel.value || '';
+}
+
+function populateSelect(id, options) {
+  var sel = document.getElementById(id);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Selecione...</option>';
+  options.forEach(function(opt) { sel.innerHTML += '<option value="' + opt + '">' + opt + '</option>'; });
+}
+
+function buscarAquisicoes() {
+  var busca = document.getElementById('aq-search').value;
+  var status = document.getElementById('aq-filter-status').value;
+  var filters = {};
+  if (busca) filters.busca = busca;
+  if (status) filters.status = status;
+  callServer('consultarAquisicoes', filters).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderAquisicoesList(result.data);
+  });
+}
+
+function renderAquisicoesList(aquisicoes) {
+  var container = document.getElementById('aq-results');
+  if (aquisicoes.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhuma aquisicao encontrada.</p></div>';
+    return;
+  }
+  var html = '<table class="data-table"><thead><tr>'
+    + '<th>ID</th><th>Status</th><th>Etapa</th><th>Descricao</th><th>Dias</th><th>Acoes</th>'
+    + '</tr></thead><tbody>';
+  aquisicoes.forEach(function(a) {
+    html += '<tr>'
+      + '<td class="clickable" onclick="verAquisicao(\'' + a.id + '\')">' + a.id + '</td>'
+      + '<td>' + statusBadge(a.statusGeral) + '</td>'
+      + '<td class="text-small">' + (a.etapaAtual || '-') + '</td>'
+      + '<td class="text-small">' + (a.descricao || '').substring(0, 40) + '</td>'
+      + '<td>' + a.diasAberto + '</td>'
+      + '<td>'
+      + '<button class="btn btn-sm btn-secondary" onclick="editarAq(\'' + a.id + '\')">Editar</button> '
+      + '<button class="btn btn-sm btn-primary" onclick="verEtapas(\'' + a.id + '\')">Etapas</button> '
+      + '<button class="btn btn-sm btn-danger" onclick="deletarAq(\'' + a.id + '\')">Excluir</button>'
+      + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function showAquisicaoForm() {
+  editingAquisicaoId = null;
+  document.getElementById('aq-form-title').textContent = 'Nova Aquisicao';
+  document.getElementById('aq-form-id').value = '';
+  resetForm('aq-form');
+  document.getElementById('aq-view-consulta').classList.add('hidden');
+  document.getElementById('aq-view-form').classList.remove('hidden');
+}
+
+function hideAquisicaoForm() {
+  document.getElementById('aq-view-form').classList.add('hidden');
+  document.getElementById('aq-view-consulta').classList.remove('hidden');
+}
+
+function salvarAquisicao() {
+  var data = collectFormData('aq-form');
+  if (editingAquisicaoId) {
+    callServer('editarAquisicao', editingAquisicaoId, data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideAquisicaoForm(); buscarAquisicoes(); }
+    });
+  } else {
+    callServer('criarAquisicao', data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideAquisicaoForm(); buscarAquisicoes(); }
+    });
+  }
+}
+
+function editarAq(id) {
+  callServer('getAquisicaoParaEdicao', id).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    editingAquisicaoId = id;
+    document.getElementById('aq-form-title').textContent = 'Editar Aquisicao ' + id;
+    document.getElementById('aq-form-id').value = id;
+    fillFormData('aq-form', result.data);
+    document.getElementById('aq-view-consulta').classList.add('hidden');
+    document.getElementById('aq-view-form').classList.remove('hidden');
+  });
+}
+
+function deletarAq(id) {
+  if (!confirm('Tem certeza que deseja EXCLUIR a aquisicao ' + id + '?\nEsta acao remove a aquisicao e todas as suas etapas permanentemente.')) return;
+  callServer('deletarAquisicao', id).then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+    if (result.success) buscarAquisicoes();
+  });
+}
+
+function verAquisicao(id) {
+  callServer('consultarAquisicaoPorId', id).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    var p = result.data;
+    var html = '<div class="card">'
+      + '<div class="card-title">' + p.id + ' - ' + p.descricao + '</div>'
+      + '<p>' + statusBadge(p.statusGeral) + ' | Etapa: ' + (p.etapaAtual || '-') + '</p>'
+      + '<table class="data-table mt-8">'
+      + '<tr><td><strong>Tipo</strong></td><td>' + p.tipoContratacao + '</td></tr>'
+      + '<tr><td><strong>Nat. Terceiro</strong></td><td>' + p.naturezaTerceiro + '</td></tr>'
+      + '<tr><td><strong>Nat. Contratacao</strong></td><td>' + p.naturezaContratacao + '</td></tr>'
+      + '<tr><td><strong>Forma</strong></td><td>' + p.formaContratacao + '</td></tr>'
+      + '<tr><td><strong>Valor</strong></td><td>R$ ' + (p.valorEstimado || 0) + '</td></tr>'
+      + '<tr><td><strong>Fornecedor</strong></td><td>' + (p.fornecedor || 'Nenhum') + '</td></tr>'
+      + '<tr><td><strong>Abertura</strong></td><td>' + (p.dataAbertura || '-') + '</td></tr>'
+      + '<tr><td><strong>Prazo</strong></td><td>' + (p.prazoPrevisto || '-') + '</td></tr>'
+      + '<tr><td><strong>Dias Aberto</strong></td><td>' + p.diasAberto + '</td></tr>'
+      + '</table>'
+      + '<div class="btn-group mt-8">'
+      + '<button class="btn btn-primary btn-sm" onclick="verEtapas(\'' + p.id + '\')">Ver Etapas</button>'
+      + '<button class="btn btn-secondary btn-sm" onclick="editarAq(\'' + p.id + '\')">Editar</button>'
+      + '<button class="btn btn-danger btn-sm" onclick="deletarAq(\'' + p.id + '\')">Excluir</button>'
+      + '<button class="btn btn-secondary btn-sm" onclick="buscarAquisicoes();hideAquisicaoForm()">Voltar</button>'
+      + '</div></div>';
+    document.getElementById('aq-results').innerHTML = html;
+  });
+}
+
+function verEtapas(id) { navigateTo('etapas', { processoId: id }); }
+</script>

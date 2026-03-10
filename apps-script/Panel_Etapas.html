@@ -1,0 +1,84 @@
+<!-- Painel de Etapas (Timeline) -->
+<div class="card">
+  <div class="card-title" id="etapas-title">Etapas da Aquisicao</div>
+  <p class="text-small text-muted" id="etapas-subtitle"></p>
+</div>
+<div id="etapas-timeline"></div>
+<div class="btn-group mt-8">
+  <button class="btn btn-secondary btn-sm" onclick="navigateTo('aquisicoes')">Voltar para Aquisicoes</button>
+</div>
+
+<script>
+var currentAquisicaoId = null;
+
+function initEtapasPanel(params) {
+  if (params && params.processoId) {
+    currentAquisicaoId = params.processoId;
+    document.getElementById('etapas-title').textContent = 'Etapas — ' + params.processoId;
+    carregarEtapas(params.processoId);
+  } else {
+    document.getElementById('etapas-timeline').innerHTML = '<div class="card text-center"><p class="text-muted">Selecione uma aquisicao para ver as etapas.</p></div>';
+  }
+}
+
+function carregarEtapas(aquisicaoId) {
+  callServer('consultarEtapas', aquisicaoId).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderTimeline(result.data);
+  });
+}
+
+function renderTimeline(etapas) {
+  var container = document.getElementById('etapas-timeline');
+  if (etapas.length === 0) { container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhuma etapa encontrada.</p></div>'; return; }
+  var html = '<ul class="timeline">';
+  etapas.forEach(function(e) {
+    var itemClass = '';
+    if (e.status === 'Em Andamento') itemClass = 'active';
+    else if (e.status === 'Concluido') itemClass = 'done';
+    else if (e.status === 'N/A') itemClass = 'na';
+    var dataInfo = '';
+    if (e.dataInicio) { var dt = e.dataInicio instanceof Date ? e.dataInicio : new Date(e.dataInicio); dataInfo += 'Inicio: ' + (dt.toLocaleDateString ? dt.toLocaleDateString('pt-BR') : e.dataInicio); }
+    if (e.dataConclusao) { var dc = e.dataConclusao instanceof Date ? e.dataConclusao : new Date(e.dataConclusao); dataInfo += ' | Conclusao: ' + (dc.toLocaleDateString ? dc.toLocaleDateString('pt-BR') : e.dataConclusao); }
+    if (e.prazoLimite) { var pl = e.prazoLimite instanceof Date ? e.prazoLimite : new Date(e.prazoLimite); dataInfo += ' | Prazo: ' + (pl.toLocaleDateString ? pl.toLocaleDateString('pt-BR') : e.prazoLimite); }
+    html += '<li class="timeline-item ' + itemClass + '">'
+      + '<div class="tl-title">' + e.num + '. ' + e.etapa + '</div>'
+      + '<div class="tl-meta">' + statusBadge(e.status) + ' | Resp: ' + e.responsavel + '</div>';
+    if (dataInfo) html += '<div class="tl-meta">' + dataInfo + '</div>';
+    if (e.documentoRef) html += '<div class="tl-meta">Doc: ' + e.documentoRef + '</div>';
+    if (e.observacoes) html += '<div class="tl-meta">Obs: ' + e.observacoes + '</div>';
+    if (e.status === 'Em Andamento') {
+      html += '<div class="mt-8">'
+        + '<button class="btn btn-success btn-sm" onclick="concluirEtapaUI(' + e.num + ')">Concluir Etapa</button> '
+        + '<button class="btn btn-secondary btn-sm" onclick="editarEtapaUI(' + e.num + ')">Editar</button></div>';
+    }
+    html += '</li>';
+  });
+  html += '</ul>';
+  container.innerHTML = html;
+}
+
+function concluirEtapaUI(etapaNum) {
+  if (!currentAquisicaoId) return;
+  callServer('concluirEtapa', currentAquisicaoId, etapaNum).then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+    if (result.success) carregarEtapas(currentAquisicaoId);
+  });
+}
+
+function editarEtapaUI(etapaNum) {
+  if (!currentAquisicaoId) return;
+  var prazo = prompt('Prazo Limite (dd/mm/aaaa):');
+  var docRef = prompt('Documento Referencia:');
+  var obs = prompt('Observacoes:');
+  var updates = {};
+  if (prazo) { var parts = prazo.split('/'); if (parts.length === 3) updates.prazoLimite = new Date(parts[2], parts[1] - 1, parts[0]); }
+  if (docRef) updates.documentoRef = docRef;
+  if (obs) updates.observacoes = obs;
+  if (Object.keys(updates).length === 0) { showToast('Nenhuma alteracao informada.', 'warning'); return; }
+  callServer('atualizarEtapa', currentAquisicaoId, etapaNum, updates).then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+    if (result.success) carregarEtapas(currentAquisicaoId);
+  });
+}
+</script>

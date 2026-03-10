@@ -1,0 +1,156 @@
+<!-- Painel de Fornecedores -->
+<div id="forn-view-consulta">
+  <div class="card">
+    <div class="card-title">Fornecedores</div>
+    <div class="btn-group mb-8">
+      <button class="btn btn-primary btn-sm" onclick="showFornecedorForm()">Novo Fornecedor</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="forn-search" placeholder="Buscar por razao social ou CNPJ/CPF..." onkeyup="if(event.key==='Enter')buscarFornecedores()">
+      <button class="btn btn-secondary btn-sm" onclick="buscarFornecedores()">Buscar</button>
+    </div>
+  </div>
+  <div id="forn-results"></div>
+</div>
+
+<div id="forn-view-form" class="hidden">
+  <div class="card">
+    <div class="card-title" id="forn-form-title">Novo Fornecedor</div>
+    <form id="forn-form">
+      <input type="hidden" name="originalCnpjCpf" id="forn-original-doc">
+      <div class="form-group">
+        <label>CNPJ/CPF *</label>
+        <input type="text" name="cnpjCpf" required id="forn-doc">
+      </div>
+      <div class="form-group">
+        <label>Razao Social *</label>
+        <input type="text" name="razaoSocial" required>
+      </div>
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select name="tipo" required>
+          <option value="">Selecione...</option>
+          <option value="Pessoa Juridica">Pessoa Juridica</option>
+          <option value="Pessoa Fisica">Pessoa Fisica</option>
+          <option value="Organismo Internacional">Organismo Internacional</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Contato</label>
+        <input type="text" name="contato">
+      </div>
+      <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" name="email">
+      </div>
+      <div class="form-group">
+        <label>Telefone</label>
+        <input type="text" name="telefone">
+      </div>
+      <div class="form-group">
+        <label>Dados Bancarios</label>
+        <textarea name="dadosBancarios"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Observacoes</label>
+        <textarea name="observacoes"></textarea>
+      </div>
+      <div class="btn-group">
+        <button type="button" class="btn btn-primary" onclick="salvarFornecedor()">Salvar</button>
+        <button type="button" class="btn btn-secondary" onclick="hideFornecedorForm()">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+var editingFornecedor = null;
+
+function initFornecedoresPanel(mode) {
+  if (mode === 'novo') {
+    showFornecedorForm();
+  } else {
+    buscarFornecedores();
+  }
+}
+
+function buscarFornecedores() {
+  var busca = document.getElementById('forn-search').value;
+  var filters = {};
+  if (busca) filters.busca = busca;
+
+  callServer('consultarFornecedores', filters).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderFornecedoresList(result.data);
+  });
+}
+
+function renderFornecedoresList(fornecedores) {
+  var container = document.getElementById('forn-results');
+  if (fornecedores.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted">Nenhum fornecedor encontrado.</p></div>';
+    return;
+  }
+
+  var html = '<table class="data-table"><thead><tr>'
+    + '<th>CNPJ/CPF</th><th>Razao Social</th><th>Tipo</th><th>Cadastro</th><th>Credenciamento</th><th>Acoes</th>'
+    + '</tr></thead><tbody>';
+
+  fornecedores.forEach(function(f) {
+    html += '<tr>'
+      + '<td class="text-small">' + f.cnpjCpf + '</td>'
+      + '<td>' + f.razaoSocial + '</td>'
+      + '<td class="text-small">' + (f.tipo || '-') + '</td>'
+      + '<td>' + statusBadge(f.statusCadastro || 'Pendente') + '</td>'
+      + '<td>' + statusBadge(f.statusCredenciamento || 'Pendente') + '</td>'
+      + '<td><button class="btn btn-sm btn-secondary" onclick="editarForn(\'' + f.cnpjCpf + '\')">Editar</button></td>'
+      + '</tr>';
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function showFornecedorForm() {
+  editingFornecedor = null;
+  document.getElementById('forn-form-title').textContent = 'Novo Fornecedor';
+  document.getElementById('forn-original-doc').value = '';
+  document.getElementById('forn-doc').disabled = false;
+  resetForm('forn-form');
+  document.getElementById('forn-view-consulta').classList.add('hidden');
+  document.getElementById('forn-view-form').classList.remove('hidden');
+}
+
+function hideFornecedorForm() {
+  document.getElementById('forn-view-form').classList.add('hidden');
+  document.getElementById('forn-view-consulta').classList.remove('hidden');
+}
+
+function salvarFornecedor() {
+  var data = collectFormData('forn-form');
+  if (editingFornecedor) {
+    callServer('editarFornecedor', editingFornecedor, data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideFornecedorForm(); buscarFornecedores(); }
+    });
+  } else {
+    callServer('criarFornecedor', data).then(function(result) {
+      showToast(result.message, result.success ? 'success' : 'error');
+      if (result.success) { hideFornecedorForm(); buscarFornecedores(); }
+    });
+  }
+}
+
+function editarForn(cnpjCpf) {
+  callServer('consultarFornecedorPorCnpj', cnpjCpf).then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    editingFornecedor = cnpjCpf;
+    document.getElementById('forn-form-title').textContent = 'Editar Fornecedor';
+    document.getElementById('forn-original-doc').value = cnpjCpf;
+    document.getElementById('forn-doc').disabled = true;
+    fillFormData('forn-form', result.data);
+    document.getElementById('forn-view-consulta').classList.add('hidden');
+    document.getElementById('forn-view-form').classList.remove('hidden');
+  });
+}
+</script>

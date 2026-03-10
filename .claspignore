@@ -1,0 +1,14 @@
+# Ignorar tudo que não é código Apps Script
+node_modules/**
+scripts/**
+.git/**
+.github/**
+*.md
+package.json
+package-lock.json
+.clasp.json
+.gitignore
+
+# Arquivo consolidado — apenas para instalacao manual (copy/paste)
+# Nao enviar via clasp push (causa conflito de funcoes duplicadas)
+*CONSOLIDADO*

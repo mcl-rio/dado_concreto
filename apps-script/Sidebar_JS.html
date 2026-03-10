@@ -1,0 +1,137 @@
+<script>
+function callServer(functionName) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  showLoading();
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(function(result) { hideLoading(); resolve(result); })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        var msg = error.message || error || 'Erro inesperado';
+        if (msg.indexOf('sistema esta ocupado') !== -1) {
+          showToast('Sistema ocupado. Tentando novamente...', 'warning');
+          setTimeout(function() { callServerNoRetry.apply(null, [functionName].concat(args)).then(resolve).catch(reject); }, 3000);
+        } else { showToast(msg, 'error'); reject(error); }
+      });
+    runner[functionName].apply(runner, args);
+  });
+}
+
+function callServerNoRetry(functionName) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  showLoading();
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(function(result) { hideLoading(); resolve(result); })
+      .withFailureHandler(function(error) { hideLoading(); showToast(error.message || 'Erro', 'error'); reject(error); });
+    runner[functionName].apply(runner, args);
+  });
+}
+
+var currentPanel = 'home';
+
+function navigateTo(panelName, params) {
+  currentPanel = panelName;
+  var btns = document.querySelectorAll('.nav-btn');
+  btns.forEach(function(btn) { btn.classList.toggle('active', btn.dataset.panel === panelName); });
+  switch (panelName) {
+    case 'home': renderHomePanel(); break;
+    case 'aquisicoes': case 'aquisicoes-consulta':
+      loadPanel('getPanelAquisicoes', function() { initAquisicoesPanel('consulta'); }); break;
+    case 'aquisicoes-novo':
+      loadPanel('getPanelAquisicoes', function() { initAquisicoesPanel('novo'); }); break;
+    case 'fornecedores': case 'fornecedores-consulta':
+      loadPanel('getPanelFornecedores', function() { initFornecedoresPanel('consulta'); }); break;
+    case 'fornecedores-novo':
+      loadPanel('getPanelFornecedores', function() { initFornecedoresPanel('novo'); }); break;
+    case 'etapas':
+      loadPanel('getPanelEtapas', function() { initEtapasPanel(params); }); break;
+    case 'dashboard':
+      loadPanel('getPanelDashboard', function() { initDashboardPanel(); }); break;
+    case 'alertas':
+      loadPanel('getPanelAlertas', function() { initAlertasPanel(); }); break;
+    case 'config':
+      loadPanel('getPanelConfig', function() { initConfigPanel(); }); break;
+    default: renderHomePanel();
+  }
+}
+
+function loadPanel(serverFunction, initCallback) {
+  callServer(serverFunction).then(function(html) {
+    var contentArea = document.getElementById('content-area');
+    contentArea.innerHTML = html;
+    var scripts = contentArea.querySelectorAll('script');
+    scripts.forEach(function(oldScript) {
+      var newScript = document.createElement('script');
+      newScript.textContent = oldScript.textContent;
+      oldScript.parentNode.replaceChild(newScript, oldScript);
+    });
+    if (initCallback) initCallback();
+  }).catch(function(err) {
+    document.getElementById('content-area').innerHTML = '<div class="card text-center"><p class="text-muted">Erro ao carregar painel.</p></div>';
+  });
+}
+
+function renderHomePanel() {
+  var html = '<div class="card">'
+    + '<div class="card-title">Workflow ADM DINT 2.0</div>'
+    + '<p class="text-small text-muted mb-12">Controle de Aquisicoes — Diretoria Internacional</p>'
+    + '</div>'
+    + '<div class="home-grid">'
+    + '<div class="home-card" onclick="navigateTo(\'aquisicoes\')"><div class="icon">&#128203;</div><div class="label">Aquisicoes</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\'fornecedores\')"><div class="icon">&#127970;</div><div class="label">Fornecedores</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\'dashboard\')"><div class="icon">&#128202;</div><div class="label">Dashboard</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\'alertas\')"><div class="icon">&#128276;</div><div class="label">Alertas</div></div>'
+    + '<div class="home-card" onclick="navigateTo(\'config\')"><div class="icon">&#9881;</div><div class="label">Configuracao</div></div>'
+    + '</div>';
+  document.getElementById('content-area').innerHTML = html;
+}
+
+function showLoading() { var o = document.getElementById('loading-overlay'); if (o) o.classList.add('show'); }
+function hideLoading() { var o = document.getElementById('loading-overlay'); if (o) o.classList.remove('show'); }
+
+function showToast(message, type, duration) {
+  type = type || 'success'; duration = duration || 4000;
+  var container = document.getElementById('toast-container');
+  if (!container) return;
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(function() { toast.remove(); }, 300); }, duration);
+}
+
+function collectFormData(formId) {
+  var form = document.getElementById(formId);
+  if (!form) return {};
+  var data = {};
+  form.querySelectorAll('input, select, textarea').forEach(function(input) { if (input.name) data[input.name] = input.value; });
+  return data;
+}
+
+function fillFormData(formId, data) {
+  var form = document.getElementById(formId);
+  if (!form || !data) return;
+  Object.keys(data).forEach(function(key) { var input = form.querySelector('[name="' + key + '"]'); if (input) input.value = data[key] || ''; });
+}
+
+function resetForm(formId) { var form = document.getElementById(formId); if (form) form.reset(); }
+
+function statusBadge(status) {
+  var cls = 'badge-pendente';
+  switch (status) {
+    case 'Em Andamento': cls = 'badge-andamento'; break;
+    case 'Concluido': cls = 'badge-concluido'; break;
+    case 'Cancelado': cls = 'badge-cancelado'; break;
+    case 'Suspenso': cls = 'badge-suspenso'; break;
+    case 'N/A': cls = 'badge-na'; break;
+  }
+  return '<span class="badge ' + cls + '">' + (status || 'Pendente') + '</span>';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  callServer('getInitialPanel').then(function(panel) {
+    if (panel && panel !== 'home') navigateTo(panel); else renderHomePanel();
+  }).catch(function() { renderHomePanel(); });
+});
+</script>

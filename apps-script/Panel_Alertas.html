@@ -1,0 +1,97 @@
+<!-- Painel de Alertas -->
+<div class="card">
+  <div class="card-title">Alertas Ativos</div>
+  <button class="btn btn-secondary btn-sm" onclick="carregarAlertas()">Atualizar</button>
+</div>
+<div id="alertas-list"></div>
+
+<div class="card mt-12">
+  <div class="card-title">Configuracao de Alertas</div>
+  <form id="alertas-config-form">
+    <div class="form-group">
+      <label>Destinatarios (emails separados por virgula)</label>
+      <textarea name="recipients" id="alert-recipients" rows="2"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Dias antes do vencimento para alertar</label>
+      <input type="number" name="overdueWarningDays" id="alert-warning-days" min="1" value="3">
+    </div>
+    <div class="form-group">
+      <label>Dias sem movimentacao (processo parado)</label>
+      <input type="number" name="staleDays" id="alert-stale-days" min="1" value="15">
+    </div>
+    <div class="form-group">
+      <label>Dias antes do vencimento de credenciamento</label>
+      <input type="number" name="credentialWarningDays" id="alert-cred-days" min="1" value="30">
+    </div>
+    <div class="btn-group">
+      <button type="button" class="btn btn-primary btn-sm" onclick="salvarConfigAlerta()">Salvar Configuracao</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="executarAlertasManual()">Executar Alertas Agora</button>
+    </div>
+  </form>
+</div>
+
+<script>
+function initAlertasPanel() {
+  carregarAlertas();
+  carregarConfigAlertas();
+}
+
+function carregarAlertas() {
+  callServer('getAlertasAtivos').then(function(result) {
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    renderAlertas(result.data);
+  });
+}
+
+function renderAlertas(alertas) {
+  var container = document.getElementById('alertas-list');
+  if (alertas.length === 0) {
+    container.innerHTML = '<div class="card text-center"><p class="text-muted text-small">Nenhum alerta ativo.</p></div>';
+    return;
+  }
+
+  var html = '';
+  alertas.forEach(function(a) {
+    var isWarning = a.alerta.indexOf('PROXIMO') !== -1 || a.alerta.indexOf('VENCENDO') !== -1;
+    html += '<div class="alert-item' + (isWarning ? ' warning' : '') + '">'
+      + '<strong>' + a.processo + '</strong> — ' + (a.descricao || '') + '<br>'
+      + '<span class="text-small">' + a.alerta + '</span>'
+      + '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function carregarConfigAlertas() {
+  callServer('getConfigAlertas').then(function(config) {
+    document.getElementById('alert-recipients').value = config.recipients || '';
+    document.getElementById('alert-warning-days').value = config.thresholds.overdueWarningDays || 3;
+    document.getElementById('alert-stale-days').value = config.thresholds.staleDays || 15;
+    document.getElementById('alert-cred-days').value = config.thresholds.credentialWarningDays || 30;
+  });
+}
+
+function salvarConfigAlerta() {
+  var config = {
+    recipients: document.getElementById('alert-recipients').value,
+    thresholds: {
+      overdueWarningDays: parseInt(document.getElementById('alert-warning-days').value, 10),
+      staleDays: parseInt(document.getElementById('alert-stale-days').value, 10),
+      credentialWarningDays: parseInt(document.getElementById('alert-cred-days').value, 10)
+    }
+  };
+
+  callServer('salvarConfigAlertas', config).then(function(result) {
+    showToast(result.message, result.success ? 'success' : 'error');
+  });
+}
+
+function executarAlertasManual() {
+  callServer('executarAlertasDiarios').then(function() {
+    showToast('Alertas executados com sucesso.', 'success');
+    carregarAlertas();
+  }).catch(function() {
+    showToast('Erro ao executar alertas.', 'error');
+  });
+}
+</script>
